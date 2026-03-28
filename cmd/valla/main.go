@@ -17,6 +17,7 @@ import (
 	"github.com/tariktz/valla-cli/internal/registry"
 	"github.com/tariktz/valla-cli/internal/scaffolder"
 	itui "github.com/tariktz/valla-cli/internal/tui"
+	"github.com/tariktz/valla-cli/internal/tui/steps"
 	"github.com/tariktz/valla-cli/internal/wiring"
 )
 
@@ -37,10 +38,19 @@ func main() {
 	for k, v := range javaAvailable {
 		available[k] = v
 	}
-	feRuntimes := detector.FilterByRuntime([]string{"node", "bun"}, available)
-	beRuntimes := detector.FilterByRuntime([]string{"go", "node", "python3", "dotnet", "java"}, available)
+	feRuntimeOpts := []steps.RuntimeOption{
+		{Name: "node", Available: available["node"], Reason: "node not found"},
+		{Name: "bun", Available: available["bun"], Reason: "bun not found"},
+	}
+	beRuntimeOpts := []steps.RuntimeOption{
+		{Name: "go", Available: available["go"], Reason: "go not found"},
+		{Name: "node", Available: available["node"], Reason: "node not found"},
+		{Name: "python3", Available: available["python3"], Reason: "python3 not found"},
+		{Name: "dotnet", Available: available["dotnet"], Reason: "dotnet not found"},
+		{Name: "java", Available: available["java"], Reason: "mvn or gradle not found"},
+	}
 
-	model := itui.New(entries, feRuntimes, beRuntimes)
+	model := itui.New(entries, feRuntimeOpts, beRuntimeOpts)
 	program := tea.NewProgram(model)
 	finalModel, err := program.Run()
 	if err != nil {
