@@ -14,8 +14,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -25,10 +23,16 @@ jobs:
       - name: Test
         run: go test ./...
 
+      - name: Build binaries
+        run: |
+          mkdir dist
+          GOOS=darwin  GOARCH=arm64 go build -o dist/valla-cli_darwin_arm64     ./cmd/valla
+          GOOS=darwin  GOARCH=amd64 go build -o dist/valla-cli_darwin_amd64     ./cmd/valla
+          GOOS=linux   GOARCH=arm64 go build -o dist/valla-cli_linux_arm64      ./cmd/valla
+          GOOS=linux   GOARCH=amd64 go build -o dist/valla-cli_linux_amd64      ./cmd/valla
+          GOOS=windows GOARCH=amd64 go build -o dist/valla-cli_windows_amd64.exe ./cmd/valla
+
       - name: Release
-        uses: goreleaser/goreleaser-action@v6
+        uses: softprops/action-gh-release@v2
         with:
-          version: latest
-          args: release --clean
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          files: dist/*
