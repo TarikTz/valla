@@ -3,6 +3,7 @@ package tui
 import (
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 // SpinnerMsg signals an update to the spinner label.
@@ -14,6 +15,11 @@ type DoneMsg struct{ NextSteps string }
 // ErrMsg signals a fatal error during scaffolding.
 type ErrMsg struct{ Err error }
 
+var (
+	styleSpinnerIcon  = lipgloss.NewStyle().Foreground(lipgloss.Color("#7C3AED"))
+	styleSpinnerLabel = lipgloss.NewStyle().Foreground(lipgloss.Color("#DDDDDD"))
+)
+
 // Spinner is the execution-phase model shown after user confirms.
 type Spinner struct {
 	sp    spinner.Model
@@ -23,6 +29,7 @@ type Spinner struct {
 func NewSpinner() Spinner {
 	s := spinner.New()
 	s.Spinner = spinner.Dot
+	s.Style = styleSpinnerIcon
 	return Spinner{sp: s, label: "Initializing..."}
 }
 
@@ -42,5 +49,5 @@ func (m Spinner) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m Spinner) View() string {
-	return m.sp.View() + " " + m.label + "\n"
+	return m.sp.View() + " " + styleSpinnerLabel.Render(m.label) + "\n"
 }

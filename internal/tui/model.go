@@ -293,7 +293,7 @@ func (m Model) View() string {
 	if m.phase == phaseDone {
 		return ""
 	}
-	return m.current.View()
+	return banner() + "\n\n" + m.current.View()
 }
 
 // Context returns the final WeldContext after the TUI completes.

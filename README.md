@@ -1,23 +1,43 @@
 # valla-cli
 
-Interactive full-stack project scaffolding for teams that want a usable starting point in minutes instead of assembling frontend, backend, env wiring, and Docker by hand.
+Stop assembling stacks by hand. `valla-cli` scaffolds frontend, backend, database, and Docker wiring in a single interactive flow — from zero to a running project in minutes.
 
-`valla-cli` is a Go CLI with a Bubble Tea TUI. It scaffolds a frontend, a backend, and optional database wiring, then generates the local `.env` or `docker-compose.yml` needed to run the stack. It also supports a dedicated WordPress mode for local theme development with a bind-mounted WordPress source tree.
+## Quick Start
 
-## Status
+**Run from source:**
 
-This project is usable today, but it is still early-stage. Template coverage and generated output will continue to evolve as more stack combinations are exercised.
+```bash
+git clone https://github.com/tariktz/valla-cli
+cd valla-cli
+go run ./cmd/valla
+```
+
+**Build a local binary:**
+
+```bash
+go build -o valla-cli ./cmd/valla
+./valla-cli
+```
+
+**npm (after first release is published):**
+
+```bash
+npx valla-cli
+```
+
+The repo includes a GoReleaser config (`.goreleaser.yaml`) for cross-platform binaries and an npm wrapper (`npm/`) that downloads the correct release artifact on first run.
+
+> **Requirements:** Go is always needed. Add Node.js for frontend or Node-based backends. Add Docker Desktop or Docker Engine for Docker mode.
 
 ## What It Does
 
-- Scaffolds full-stack projects through an interactive terminal flow
-- Supports monorepo and separate-folder output modes
-- Supports a WordPress preset with local files mounted into Docker
+- Scaffolds frontend and backend together in a single interactive terminal flow
 - Generates `.env` for local development
 - Generates `docker-compose.yml` for containerized development
-- Wires frontend API defaults to the selected backend port
+- Wires frontend API defaults to the selected backend port automatically
 - Injects backend CORS configuration for supported backends
-- Uses a registry-driven architecture so new frameworks can be added without rewriting the core flow
+- Supports monorepo and separate-folder output modes
+- Includes a dedicated WordPress mode with Docker services and a starter theme
 
 ## Supported Stacks
 
@@ -62,67 +82,27 @@ The CLI walks through a short set of prompts:
 7. Optional port overrides
 8. Confirmation and scaffolding
 
-For standard app stacks, the result is a generated frontend and backend, plus environment wiring. For WordPress, the CLI downloads the latest WordPress source, prepares Docker services, and creates a starter theme inside `wordpress/wp-content/themes/<project-slug>`.
-
-## Installation
-
-### Run from source
-
-```bash
-git clone https://github.com/tariktz/valla-cli
-cd valla-cli
-go run ./cmd/valla
-```
-
-To build a local binary:
-
-```bash
-go build -o valla-cli ./cmd/valla
-./valla-cli
-```
-
-### npm (after first release is published)
-
-```bash
-npx valla-cli
-```
-
-### Distribution
-
-The repo includes a GoReleaser config (`.goreleaser.yaml`) for cross-platform binaries and an npm wrapper (`npm/`) that downloads the correct release artifact on first run.
-
-## Requirements
-
-Install only what your selected stack needs.
-
-- Go for running or building `valla-cli`
-- Node.js for frontend scaffolds and Node-based backends
-- Docker Desktop or Docker Engine if you choose Docker mode
-- Internet access for framework scaffolders and WordPress downloads
+For standard stacks, the result is a generated frontend and backend with environment wiring. For WordPress, the CLI downloads the latest WordPress source, prepares Docker services, and creates a starter theme inside `wordpress/wp-content/themes/<project-slug>`.
 
 ## Usage
 
-Run the CLI:
-
-```bash
-go run ./cmd/valla
-```
-
-The current interface is fully interactive. There is no stable flag-based or `--help` workflow yet.
-
-### Typical local workflow
+### Local workflow
 
 ```bash
 go run ./cmd/valla
 cd my-app
 ```
 
-Then:
+Then start each piece:
 
-- in the frontend: install dependencies and start the dev server
-- in the backend: run the server for the selected stack
+```bash
+# Frontend
+cd frontend && npm install && npm run dev
 
-### Typical Docker workflow
+# Backend — command depends on your selected stack
+```
+
+### Docker workflow
 
 ```bash
 go run ./cmd/valla
@@ -132,21 +112,14 @@ docker-compose up -d
 
 ### WordPress workflow
 
-Choose `WordPress` in the output structure step. The generator will create:
-
-- `.env`
-- `docker-compose.yml`
-- `wordpress/`
-- `wordpress/wp-content/themes/<project-slug>/`
-
-After generation:
+Choose `WordPress` in the output structure step. After generation:
 
 ```bash
 cd my-wordpress-project
 docker-compose up -d
 ```
 
-Then open `http://localhost:<wordpress-port>` and finish the WordPress setup in the browser.
+Then open `http://localhost:<wordpress-port>` and complete the WordPress setup in the browser.
 
 ## Generated Project Shapes
 
@@ -182,47 +155,46 @@ my-wordpress-project/
                 my-wordpress-project/
 ```
 
-## Development
+## Requirements
 
-Build the project:
+Install only what your selected stack needs.
 
-```bash
-go build ./...
-```
+- **Go** — required to run or build `valla-cli`
+- **Node.js** — required for frontend scaffolds and Node-based backends
+- **Docker Desktop or Docker Engine** — required for Docker mode
+- **Internet access** — required for framework scaffolders and WordPress downloads
 
-Run the internal test suite:
+## Roadmap
 
-```bash
-go test ./internal/...
-```
-
-## Architecture
-
-The implementation is organized around a registry of stack definitions and templates.
-
-- `internal/registry/`: framework metadata, embedded YAML, templates, dockerfiles
-- `internal/tui/`: interactive prompt flow
-- `internal/wiring/`: `.env`, Docker Compose, HTTP client, and CORS wiring
-- `internal/scaffolder/`: template rendering, file writes, rollback, rename handling
-- `cmd/valla/`: CLI entrypoint and orchestration
-
-This structure is meant to keep new stack support additive rather than invasive.
+- More backend and database combinations
+- Stronger end-to-end validation across stack combinations
+- Non-interactive flags for CI and scripted usage
+- Polished release automation for npm and GitHub Releases
 
 ## Contributing
 
 Contributions are welcome, especially in these areas:
 
-- new framework or database entries
-- improvements to generated templates
-- cross-platform packaging and release setup
-- end-to-end validation for more stack combinations
+- New framework or database entries
+- Improvements to generated templates
+- Cross-platform packaging and release setup
+- End-to-end validation for more stack combinations
 - UX improvements in the interactive flow
 
 If you open a PR for a new stack, keep the change registry-driven and include tests for any new wiring behavior.
 
-## Roadmap
+## Architecture
 
-- more backend and database combinations
-- stronger end-to-end validation across stack combinations
-- non-interactive flags for CI and scripted usage
-- polished release automation for npm and GitHub Releases
+The implementation is organized around a registry of stack definitions and templates.
+
+- `internal/registry/` — framework metadata, embedded YAML, templates, Dockerfiles
+- `internal/tui/` — interactive prompt flow
+- `internal/wiring/` — `.env`, Docker Compose, HTTP client, and CORS wiring
+- `internal/scaffolder/` — template rendering, file writes, rollback, rename handling
+- `cmd/valla/` — CLI entrypoint and orchestration
+
+New stack support is additive — adding a framework does not require changes to the core flow.
+
+## Status
+
+Early-stage but usable today. Template coverage and generated output will continue to evolve as more stack combinations are exercised.
