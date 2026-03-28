@@ -12,8 +12,8 @@ import (
 // DockerOptions groups all inputs needed to generate docker-compose.yml.
 type DockerOptions struct {
 	Ctx      registry.WeldContext
-	Frontend registry.DockerConfig
-	Backend  registry.DockerConfig
+	Frontend *registry.DockerConfig // nil when no frontend selected
+	Backend  *registry.DockerConfig // nil when no backend selected
 	DB       *registry.DockerConfig
 	IsSQLite bool
 }
@@ -22,12 +22,13 @@ const composeTmpl = `version: "3.8"
 networks:
   weld-net:
     driver: bridge
-{{- if not .IsSQLite}}
+{{- if and .DB (not .IsSQLite)}}
 volumes:
   db-data:
 {{- end}}
 
 services:
+{{- if .Frontend}}
   frontend:
     build:
       context: {{.FrontendContext}}
@@ -41,7 +42,11 @@ services:
 {{- end }}
 {{- end }}
     networks: [weld-net]
+{{- if .Backend}}
     depends_on: [backend]
+{{- end}}
+{{- end}}
+{{- if .Backend}}
 
   backend:
     build:
@@ -57,8 +62,11 @@ services:
 {{- end }}
     env_file: .env
     networks: [weld-net]
-{{- if not .IsSQLite}}
+{{- if and .DB (not .IsSQLite)}}
     depends_on: [db]
+{{- end}}
+{{- end}}
+{{- if and .DB (not .IsSQLite)}}
 
   db:
     image: {{.DB.Image}}
@@ -73,7 +81,7 @@ services:
     volumes:
       - db-data:/var/lib/postgresql/data
     networks: [weld-net]
-{{- end }}
+{{- end}}
 `
 
 type composeData struct {
@@ -87,20 +95,34 @@ type composeData struct {
 
 // GenerateDockerCompose produces the content of docker-compose.yml.
 func GenerateDockerCompose(opts DockerOptions) (string, error) {
-	frontendContext := opts.Frontend.BuildContext
-	backendContext := opts.Backend.BuildContext
-	if opts.Ctx.OutputMode == "separate" {
-		frontendContext = fmt.Sprintf("./%s-frontend", opts.Ctx.ProjectName)
-		backendContext = fmt.Sprintf("./%s-backend", opts.Ctx.ProjectName)
+	var frontendContext, backendContext string
+	if opts.Frontend != nil {
+		frontendContext = opts.Frontend.BuildContext
+		if opts.Ctx.OutputMode == "separate" {
+			frontendContext = fmt.Sprintf("./%s-frontend", opts.Ctx.ProjectName)
+		}
+	}
+	if opts.Backend != nil {
+		backendContext = opts.Backend.BuildContext
+		if opts.Ctx.OutputMode == "separate" {
+			backendContext = fmt.Sprintf("./%s-backend", opts.Ctx.ProjectName)
+		}
 	}
 
-	frontendEnv, err := renderDockerEnv(opts.Frontend.EnvVars, opts.Ctx, false)
-	if err != nil {
-		return "", err
+	var err error
+	var frontendEnv []string
+	if opts.Frontend != nil {
+		frontendEnv, err = renderDockerEnv(opts.Frontend.EnvVars, opts.Ctx, false)
+		if err != nil {
+			return "", err
+		}
 	}
-	backendEnv, err := renderDockerEnv(opts.Backend.EnvVars, opts.Ctx, false)
-	if err != nil {
-		return "", err
+	var backendEnv []string
+	if opts.Backend != nil {
+		backendEnv, err = renderDockerEnv(opts.Backend.EnvVars, opts.Ctx, false)
+		if err != nil {
+			return "", err
+		}
 	}
 	var dbEnv []string
 	if opts.DB != nil {

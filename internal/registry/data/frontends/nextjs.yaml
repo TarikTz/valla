@@ -1,0 +1,19 @@
+id: nextjs
+name: Next.js
+type: frontend
+runtime: node
+group: Next.js
+requires_runtime: node
+scaffold_cmd: "npm create next-app@latest {{.ScaffoldName}} -- --typescript --tailwind --eslint --app --src-dir --import-alias \"@/*\" --no-git"
+default_port: 3000
+http_client_patch:
+  file: src/lib/api.ts
+  mode: create
+  template: |
+    export const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:{{.BackendPort}}'
+docker:
+  image: node:20-alpine
+  build_context: ./frontend
+  dockerfile: internal/registry/data/dockerfiles/node-nextjs.Dockerfile
+  env_vars:
+    NEXT_PUBLIC_API_URL: "http://localhost:{{.BackendPort}}"

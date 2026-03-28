@@ -36,8 +36,8 @@ func makeDockerOptions(isSQLite bool, outputMode string) wiring.DockerOptions {
 	}
 	return wiring.DockerOptions{
 		Ctx:      ctx,
-		Frontend: frontend,
-		Backend:  backend,
+		Frontend: &frontend,
+		Backend:  &backend,
 		DB:       db,
 		IsSQLite: isSQLite,
 	}

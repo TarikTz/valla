@@ -1,0 +1,19 @@
+id: tanstack
+name: TanStack Start
+type: frontend
+runtime: node
+group: TanStack Start
+requires_runtime: node
+scaffold_cmd: "npm create tsrouter-app@latest {{.ScaffoldName}} -- --framework react --template start-basic --no-git"
+default_port: 3000
+http_client_patch:
+  file: app/api.ts
+  mode: create
+  template: |
+    export const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:{{.BackendPort}}'
+docker:
+  image: node:20-alpine
+  build_context: ./frontend
+  dockerfile: internal/registry/data/dockerfiles/node-tanstack.Dockerfile
+  env_vars:
+    VITE_API_URL: "http://localhost:{{.BackendPort}}"

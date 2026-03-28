@@ -1,0 +1,19 @@
+id: nextjs-bun
+name: Next.js
+type: frontend
+runtime: bun
+group: Next.js
+requires_runtime: bun
+scaffold_cmd: "bunx create-next-app@latest {{.ScaffoldName}} --typescript --tailwind --eslint --app --src-dir --import-alias \"@/*\" --no-git"
+default_port: 3000
+http_client_patch:
+  file: src/lib/api.ts
+  mode: create
+  template: |
+    export const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:{{.BackendPort}}'
+docker:
+  image: oven/bun:1
+  build_context: ./frontend
+  dockerfile: internal/registry/data/dockerfiles/bun-nextjs.Dockerfile
+  env_vars:
+    NEXT_PUBLIC_API_URL: "http://localhost:{{.BackendPort}}"
