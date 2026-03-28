@@ -1,0 +1,19 @@
+id: react-bun
+name: React
+type: frontend
+runtime: bun
+group: React
+requires_runtime: bun
+scaffold_cmd: "bun create vite@latest {{.ScaffoldName}} --template react"
+default_port: 5173
+http_client_patch:
+  file: src/api.ts
+  mode: create
+  template: |
+    export const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:{{.BackendPort}}'
+docker:
+  image: oven/bun:1
+  build_context: ./frontend
+  dockerfile: internal/registry/data/dockerfiles/bun-frontend.Dockerfile
+  env_vars:
+    VITE_API_URL: "http://localhost:{{.BackendPort}}"
