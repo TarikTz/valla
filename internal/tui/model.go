@@ -97,7 +97,7 @@ func (m Model) handleStepDone(msg steps.StepDone) (tea.Model, tea.Cmd) {
 		}
 		if len(m.feRuntimes) == 0 || len(m.beRuntimes) == 0 {
 			return m, func() tea.Msg {
-				return ErrMsg{Err: fmt.Errorf("no supported runtimes detected; install Node.js or Go to continue")}
+				return ErrMsg{Err: fmt.Errorf("no supported runtimes detected; install Node.js, Go, or Python to continue")}
 			}
 		}
 		if choice == "Monorepo" {

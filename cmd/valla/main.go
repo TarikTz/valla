@@ -27,9 +27,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	available := detector.Detect([]string{"go", "node", "bun"})
+	available := detector.Detect([]string{"go", "node", "bun", "python3"})
 	feRuntimes := detector.FilterByRuntime([]string{"node", "bun"}, available)
-	beRuntimes := detector.FilterByRuntime([]string{"go", "node"}, available)
+	beRuntimes := detector.FilterByRuntime([]string{"go", "node", "python3"}, available)
 
 	model := itui.New(entries, feRuntimes, beRuntimes)
 	program := tea.NewProgram(model)
@@ -157,6 +157,8 @@ func main() {
 		fmt.Printf("  npm install    (in /%s)\n", frontendDir)
 		if backendEntry.Runtime == "go" {
 			fmt.Printf("  go run main.go (in /%s)\n", backendDir)
+		} else if backendEntry.Runtime == "python3" {
+			fmt.Printf("  source venv/bin/activate && python ... (in /%s)\n", backendDir)
 		} else {
 			fmt.Printf("  npm install && npm start (in /%s)\n", backendDir)
 		}
