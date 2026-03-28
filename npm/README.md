@@ -2,6 +2,8 @@
 
 Stop assembling stacks by hand. `valla-cli` scaffolds frontend, backend, database, and Docker wiring in a single interactive flow — from zero to a running project in minutes.
 
+Open source — contributions welcome at [github.com/tariktz/valla](https://github.com/tariktz/valla).
+
 ## Usage
 
 ```bash
@@ -15,7 +17,8 @@ npm install -g valla-cli
 valla-cli
 ```
 
-On first run, the correct binary for your platform is downloaded and cached:
+On first run, the correct pre-built binary for your platform is downloaded and cached automatically. **No Go installation required.**
+
 - macOS/Linux: `~/.cache/valla-cli/`
 - Windows: `%LOCALAPPDATA%\valla-cli\`
 
@@ -29,6 +32,21 @@ On first run, the correct binary for your platform is downloaded and cached:
 - Supports monorepo and separate-folder output modes
 - Includes a dedicated WordPress mode with Docker services and a starter theme
 
+## How It Works
+
+The CLI walks through a short set of prompts:
+
+1. Project name
+2. Output structure (monorepo, separate folders, or WordPress)
+3. Frontend runtime and framework
+4. Backend runtime and framework
+5. Database
+6. Local `.env` or Docker Compose
+7. Optional port overrides
+8. Confirmation and scaffolding
+
+For WordPress, the CLI downloads the latest WordPress source, prepares Docker services, and creates a starter theme.
+
 ## Supported Stacks
 
 **Frontend:** React, Vue, Angular, Svelte, Astro
@@ -39,15 +57,48 @@ On first run, the correct binary for your platform is downloaded and cached:
 
 **Output modes:** Monorepo, Separate folders, WordPress
 
+## Generated Project Shapes
+
+**Monorepo:**
+```
+my-app/
+├── frontend/
+├── backend/
+├── .env
+└── docker-compose.yml
+```
+
+**Separate folders:**
+```
+my-app/
+├── my-app-frontend/
+├── my-app-backend/
+├── .env
+└── docker-compose.yml
+```
+
+**WordPress:**
+```
+my-wordpress-project/
+├── .env
+├── docker-compose.yml
+└── wordpress/
+    └── wp-content/
+        └── themes/
+            └── my-wordpress-project/
+```
+
 ## Supported Platforms
 
 | OS      | x64 | arm64 |
-|---------|-----|-------|
-| macOS   | ✓   | ✓     |
-| Linux   | ✓   | ✓     |
-| Windows | ✓   | ✓     |
+|---------|:---:|:-----:|
+| macOS   |  ✓  |   ✓   |
+| Linux   |  ✓  |   ✓   |
+| Windows |  ✓  |   ✓   |
 
 ## Requirements
+
+> Go is **not** required — the npm wrapper downloads the correct binary automatically.
 
 Install only what your selected stack needs:
 
