@@ -1,0 +1,32 @@
+id: python-fastapi
+name: Python (FastAPI)
+type: backend
+runtime: python3
+group: Python
+requires_runtime: python3
+scaffold_cmd: "sh -c 'mkdir -p {{.ScaffoldName}} && cd {{.ScaffoldName}} && python3 -m venv venv && . venv/bin/activate && pip install fastapi \"uvicorn[standard]\" python-dotenv && pip freeze > requirements.txt'"
+default_port: 8000
+env_vars:
+  - PORT
+  - DB_HOST
+  - DB_PORT
+  - DB_USER
+  - DB_PASSWORD
+  - DB_NAME
+cors_patch:
+  file: main.py
+  marker: "# valla:cors"
+  template: |
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["http://localhost:{{.FrontendPort}}"],
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+post_scaffold_files:
+  - path: main.py
+    template: internal/registry/data/post-scaffold/python-fastapi-main.py.tmpl
+docker:
+  image: python:3.12-slim
+  build_context: ./backend
+  dockerfile: internal/registry/data/dockerfiles/python-fastapi.Dockerfile

@@ -1,0 +1,24 @@
+id: python-django
+name: Python (Django)
+type: backend
+runtime: python3
+group: Python
+requires_runtime: python3
+scaffold_cmd: "sh -c 'mkdir -p {{.ScaffoldName}} && cd {{.ScaffoldName}} && python3 -m venv venv && . venv/bin/activate && pip install django djangorestframework django-cors-headers python-dotenv && pip freeze > requirements.txt && django-admin startproject config .'"
+default_port: 8000
+env_vars:
+  - PORT
+  - DB_HOST
+  - DB_PORT
+  - DB_USER
+  - DB_PASSWORD
+  - DB_NAME
+post_scaffold_files:
+  - path: config/settings.py
+    template: internal/registry/data/post-scaffold/python-django-settings.py.tmpl
+  - path: config/urls.py
+    template: internal/registry/data/post-scaffold/python-django-urls.py.tmpl
+docker:
+  image: python:3.12-slim
+  build_context: ./backend
+  dockerfile: internal/registry/data/dockerfiles/python-django.Dockerfile
