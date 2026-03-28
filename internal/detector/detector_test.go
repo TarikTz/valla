@@ -23,6 +23,37 @@ func TestDetect_MissingRuntime(t *testing.T) {
 	}
 }
 
+func TestDetectWithAliases_ReturnsTrueWhenAnyAliasFound(t *testing.T) {
+	// "go" binary is available on any dev machine building this project
+	result := detector.DetectWithAliases(map[string][]string{
+		"java": {"__nonexistent_xyz__", "go"},
+	})
+	if !result["java"] {
+		t.Error("expected java=true when at least one alias (go) is found")
+	}
+}
+
+func TestDetectWithAliases_ReturnsFalseWhenNoAliasFound(t *testing.T) {
+	result := detector.DetectWithAliases(map[string][]string{
+		"java": {"__nonexistent_xyz__", "__also_missing__"},
+	})
+	if result["java"] {
+		t.Error("expected java=false when no alias is found")
+	}
+}
+
+func TestDetectWithAliases_KeyIsLogicalName(t *testing.T) {
+	result := detector.DetectWithAliases(map[string][]string{
+		"myjava": {"go"},
+	})
+	if _, ok := result["myjava"]; !ok {
+		t.Error("expected map key to be logical name 'myjava', not the alias binary name")
+	}
+	if result["go"] {
+		t.Error("expected binary alias name 'go' NOT to be a key in the result")
+	}
+}
+
 func TestFilterEntries_RemovesUnavailable(t *testing.T) {
 	runtimes := map[string]bool{"go": true}
 	available := detector.FilterByRuntime(

@@ -35,8 +35,8 @@ type Model struct {
 	ctx     registry.WeldContext
 	entries []registry.Entry
 
-	feRuntimes []string
-	beRuntimes []string
+	feRuntimeOpts []steps.RuntimeOption
+	beRuntimeOpts []steps.RuntimeOption
 
 	selectedFERuntime string
 	selectedBERuntime string
@@ -44,15 +44,26 @@ type Model struct {
 	confirmed bool
 }
 
-// New creates the root model. feRuntimes and beRuntimes are the detected available runtimes.
-func New(entries []registry.Entry, feRuntimes, beRuntimes []string) Model {
+// New creates the root model. feRuntimeOpts and beRuntimeOpts include all known runtimes,
+// with Available=false for those not detected on the user's machine.
+func New(entries []registry.Entry, feRuntimeOpts, beRuntimeOpts []steps.RuntimeOption) Model {
 	return Model{
-		phase:      phaseProjectName,
-		current:    steps.NewProjectName(),
-		entries:    entries,
-		feRuntimes: feRuntimes,
-		beRuntimes: beRuntimes,
+		phase:         phaseProjectName,
+		current:       steps.NewProjectName(),
+		entries:       entries,
+		feRuntimeOpts: feRuntimeOpts,
+		beRuntimeOpts: beRuntimeOpts,
 	}
+}
+
+// anyAvailable reports whether at least one option in the slice is available.
+func anyAvailable(opts []steps.RuntimeOption) bool {
+	for _, o := range opts {
+		if o.Available {
+			return true
+		}
+	}
+	return false
 }
 
 func (m Model) Init() tea.Cmd { return m.current.Init() }
@@ -98,30 +109,30 @@ func (m Model) handleStepDone(msg steps.StepDone) (tea.Model, tea.Cmd) {
 			return m, m.current.Init()
 		}
 		if choice == "Frontend only" {
-			if len(m.feRuntimes) == 0 {
+			if !anyAvailable(m.feRuntimeOpts) {
 				return m, func() tea.Msg {
 					return ErrMsg{Err: fmt.Errorf("no supported frontend runtimes detected; install Node.js or Bun to continue")}
 				}
 			}
 			m.ctx.OutputMode = "frontend-only"
 			m.phase = phaseFrontendRuntime
-			m.current = steps.NewRuntimeSelect("Select frontend runtime:", m.feRuntimes)
+			m.current = steps.NewRuntimeSelect("Select frontend runtime:", m.feRuntimeOpts)
 			return m, m.current.Init()
 		}
 		if choice == "Backend only" {
-			if len(m.beRuntimes) == 0 {
+			if !anyAvailable(m.beRuntimeOpts) {
 				return m, func() tea.Msg {
-					return ErrMsg{Err: fmt.Errorf("no supported backend runtimes detected; install Node.js, Go, or Python to continue")}
+					return ErrMsg{Err: fmt.Errorf("no supported backend runtimes detected; install Node.js, Go, Python, .NET, or Java (Maven/Gradle) to continue")}
 				}
 			}
 			m.ctx.OutputMode = "backend-only"
 			m.phase = phaseBackendRuntime
-			m.current = steps.NewRuntimeSelect("Select backend runtime:", m.beRuntimes)
+			m.current = steps.NewRuntimeSelect("Select backend runtime:", m.beRuntimeOpts)
 			return m, m.current.Init()
 		}
-		if len(m.feRuntimes) == 0 || len(m.beRuntimes) == 0 {
+		if !anyAvailable(m.feRuntimeOpts) || !anyAvailable(m.beRuntimeOpts) {
 			return m, func() tea.Msg {
-				return ErrMsg{Err: fmt.Errorf("no supported runtimes detected; install Node.js, Go, or Python to continue")}
+				return ErrMsg{Err: fmt.Errorf("no supported runtimes detected; install Node.js, Go, Python, .NET, or Java (Maven/Gradle) to continue")}
 			}
 		}
 		if choice == "Monorepo" {
@@ -130,7 +141,7 @@ func (m Model) handleStepDone(msg steps.StepDone) (tea.Model, tea.Cmd) {
 			m.ctx.OutputMode = "separate"
 		}
 		m.phase = phaseFrontendRuntime
-		m.current = steps.NewRuntimeSelect("Select frontend runtime:", m.feRuntimes)
+		m.current = steps.NewRuntimeSelect("Select frontend runtime:", m.feRuntimeOpts)
 	case phaseFrontendRuntime:
 		m.selectedFERuntime = msg.Value.(string)
 		names, _ := m.frameworkDisplayNames("frontend", m.selectedFERuntime)
@@ -146,13 +157,13 @@ func (m Model) handleStepDone(msg steps.StepDone) (tea.Model, tea.Cmd) {
 			m.current = steps.NewDatabaseSelect(m.databaseDisplayNames())
 		} else {
 			m.phase = phaseBackendRuntime
-			m.current = steps.NewRuntimeSelect("Select backend runtime:", m.beRuntimes)
+			m.current = steps.NewRuntimeSelect("Select backend runtime:", m.beRuntimeOpts)
 		}
 	case phaseBackendRuntime:
 		m.selectedBERuntime = msg.Value.(string)
-		names, _ := m.frameworkDisplayNames("backend", m.selectedBERuntime)
+		grouped := m.frameworkGroupedOptions("backend", m.selectedBERuntime)
 		m.phase = phaseBackendFramework
-		m.current = steps.NewFrameworkSelect("Select backend framework:", names)
+		m.current = steps.NewGroupedRuntimeSelect("Select backend framework:", grouped)
 	case phaseBackendFramework:
 		id := m.frameworkIDFromName("backend", m.selectedBERuntime, msg.Value.(string))
 		m.ctx.BackendID = id
@@ -209,6 +220,17 @@ func (m Model) frameworkDisplayNames(entryType, runtime string) (names []string,
 		}
 	}
 	return
+}
+
+// frameworkGroupedOptions returns GroupedOptions for use with GroupedRuntimeSelect.
+func (m Model) frameworkGroupedOptions(entryType, runtime string) []steps.GroupedOption {
+	var opts []steps.GroupedOption
+	for _, entry := range m.entries {
+		if entry.Type == entryType && entry.Runtime == runtime {
+			opts = append(opts, steps.GroupedOption{Name: entry.Name, Group: entry.Group})
+		}
+	}
+	return opts
 }
 
 // frameworkIDFromName resolves a display name back to a registry entry ID.

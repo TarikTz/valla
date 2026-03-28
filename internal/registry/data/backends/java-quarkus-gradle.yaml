@@ -1,0 +1,32 @@
+id: java-quarkus-gradle
+name: Quarkus (Gradle)
+type: backend
+runtime: java
+group: Java
+requires_runtime: java
+scaffold_cmd: "mvn io.quarkus:quarkus-maven-plugin:3.8.1:create -DprojectGroupId=com.example -DprojectArtifactId={{.JavaArtifactID}} -Dextensions=resteasy-reactive -DbuildTool=gradle -DnoCode=false -B && mv {{.JavaArtifactID}} {{.ScaffoldName}}"
+default_port: 8080
+env_vars:
+  - PORT
+  - DB_HOST
+  - DB_PORT
+  - DB_USER
+  - DB_PASSWORD
+  - DB_NAME
+cors_patch:
+  file: src/main/resources/application.properties
+  marker: "# valla:cors"
+  template: |
+    quarkus.http.cors=true
+    quarkus.http.cors.origins=http://localhost:{{.FrontendPort}}
+    quarkus.http.cors.methods=GET,POST,PUT,DELETE,OPTIONS
+    quarkus.http.cors.headers=Content-Type,Authorization
+post_scaffold_files:
+  - path: src/main/java/com/example/Main.java
+    template: internal/registry/data/post-scaffold/java-quarkus-main.java.tmpl
+  - path: src/main/resources/application.properties
+    template: internal/registry/data/post-scaffold/java-quarkus-application.properties.tmpl
+docker:
+  image: eclipse-temurin:21-jre-alpine
+  build_context: ./backend
+  dockerfile: internal/registry/data/dockerfiles/java-quarkus-gradle.Dockerfile
