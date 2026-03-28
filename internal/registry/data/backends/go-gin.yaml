@@ -1,0 +1,31 @@
+id: go-gin
+name: Go (Gin)
+type: backend
+runtime: go
+group: Go
+requires_runtime: go
+scaffold_cmd: "mkdir {{.ScaffoldName}} && cd {{.ScaffoldName}} && go mod init {{.ProjectName}}-backend && go get github.com/gin-gonic/gin && go get github.com/gin-contrib/cors"
+default_port: 8080
+env_vars:
+  - PORT
+  - DB_HOST
+  - DB_PORT
+  - DB_USER
+  - DB_PASSWORD
+  - DB_NAME
+cors_patch:
+  file: main.go
+  marker: "// valla:cors"
+  template: |
+    router.Use(cors.New(cors.Config{
+        AllowOrigins: []string{"http://localhost:{{.FrontendPort}}"},
+        AllowMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+        AllowHeaders: []string{"Origin", "Content-Type", "Authorization"},
+    }))
+post_scaffold_files:
+  - path: main.go
+    template: internal/registry/data/post-scaffold/go-gin-main.go.tmpl
+docker:
+  image: golang:1.22-alpine
+  build_context: ./backend
+  dockerfile: internal/registry/data/dockerfiles/go.Dockerfile

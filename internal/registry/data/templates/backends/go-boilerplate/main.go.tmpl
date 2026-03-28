@@ -1,0 +1,32 @@
+package main
+
+import (
+	"fmt"
+	"net/http"
+	"os"
+)
+
+func corsMiddleware(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// valla:cors
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		next(w, r)
+	}
+}
+
+func healthHandler(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprintf(w, `{"status":"ok"}`)
+}
+
+func main() {
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+	http.HandleFunc("/health", corsMiddleware(healthHandler))
+	fmt.Printf("Server running on :%s\n", port)
+	http.ListenAndServe(":"+port, nil)
+}

@@ -1,0 +1,5 @@
+id: sqlite
+name: SQLite
+type: database
+sqlite: true
+db_path_default: "./data/app.db"

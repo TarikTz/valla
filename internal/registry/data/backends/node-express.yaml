@@ -1,0 +1,28 @@
+id: node-express
+name: Node.js (Express)
+type: backend
+runtime: node
+group: Node.js
+requires_runtime: node
+# Note: scaffold_cmd uses sequential steps via sh -c (Unix). Scaffolder invokes via sh on Unix, cmd on Windows.
+scaffold_cmd: "sh -c 'mkdir -p {{.ScaffoldName}} && cd {{.ScaffoldName}} && npm init -y && npm install express cors dotenv'"
+default_port: 3000
+env_vars:
+  - PORT
+  - DB_HOST
+  - DB_PORT
+  - DB_USER
+  - DB_PASSWORD
+  - DB_NAME
+cors_patch:
+  file: index.js
+  marker: "// valla:cors"
+  template: |
+    app.use(cors({ origin: 'http://localhost:{{.FrontendPort}}' }))
+post_scaffold_files:
+  - path: index.js
+    template: internal/registry/data/post-scaffold/node-express-index.js.tmpl
+docker:
+  image: node:20-alpine
+  build_context: ./backend
+  dockerfile: internal/registry/data/dockerfiles/node-backend.Dockerfile

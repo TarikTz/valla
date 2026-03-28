@@ -1,0 +1,26 @@
+id: node-boilerplate
+name: Node.js (Boilerplate)
+type: backend
+runtime: node
+group: Node.js
+requires_runtime: node
+scaffold_cmd: ""
+builtin_template: internal/registry/data/templates/backends/node-boilerplate
+default_port: 3000
+env_vars:
+  - PORT
+  - DB_HOST
+  - DB_PORT
+  - DB_USER
+  - DB_PASSWORD
+  - DB_NAME
+cors_patch:
+  file: index.js
+  marker: "// valla:cors"
+  template: |
+    res.setHeader('Access-Control-Allow-Origin', 'http://localhost:{{.FrontendPort}}')
+    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS')
+docker:
+  image: node:20-alpine
+  build_context: ./backend
+  dockerfile: internal/registry/data/dockerfiles/node-backend.Dockerfile

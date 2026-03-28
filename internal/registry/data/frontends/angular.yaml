@@ -1,0 +1,17 @@
+id: angular
+name: Angular
+type: frontend
+runtime: node
+group: Angular
+requires_runtime: node
+scaffold_cmd: "npx --yes @angular/cli new {{.ScaffoldName}} --defaults --skip-git --skip-install --package-manager npm --routing --style css"
+default_port: 4200
+http_client_patch:
+  file: src/app/api.ts
+  mode: create
+  template: |
+    export const API_BASE = 'http://localhost:{{.BackendPort}}'
+docker:
+  image: node:20-alpine
+  build_context: ./frontend
+  dockerfile: internal/registry/data/dockerfiles/node-angular-frontend.Dockerfile

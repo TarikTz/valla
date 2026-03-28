@@ -1,0 +1,18 @@
+{
+  "name": "valla-cli",
+  "version": "0.1.0",
+  "description": "Interactive full-stack project scaffolder",
+  "bin": {
+    "valla-cli": "index.js"
+  },
+  "scripts": {},
+  "keywords": [
+    "scaffold",
+    "fullstack",
+    "cli"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "tar": "^7.5.13"
+  }
+}

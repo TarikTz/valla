@@ -1,0 +1,36 @@
+.valla-cli
+
+# Local binaries
+valla-cli
+weld-cli
+*.exe
+*.exe~
+*.test
+
+# Go test and coverage output
+*.out
+coverage.out
+cover.out
+
+# Node dependencies
+npm/node_modules/
+
+# Build and temp directories
+bin/
+dist/
+tmp/
+temp/
+docs/
+
+# Local environment files
+.env
+.env.*
+!.env.example
+
+# Claude Code internals
+.agents/
+.claude/
+skills-lock.json
+
+# OS files
+.DS_Store
