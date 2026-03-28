@@ -38,15 +38,19 @@ func main() {
 		fmt.Fprintf(os.Stderr, "TUI error: %v\n", err)
 		os.Exit(1)
 	}
-	ctx := finalModel.(itui.Model).Context()
-
-	projectRoot := ctx.ProjectName
-	if err := os.MkdirAll(projectRoot, 0o755); err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to create project dir: %v\n", err)
-		os.Exit(1)
+	tuiModel := finalModel.(itui.Model)
+	if !tuiModel.Confirmed() {
+		os.Exit(0)
 	}
+	ctx := tuiModel.Context()
 
+	// WordPress always gets a dedicated root directory.
 	if ctx.OutputMode == "wordpress" {
+		projectRoot := ctx.ProjectName
+		if err := os.MkdirAll(projectRoot, 0o755); err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to create project dir: %v\n", err)
+			os.Exit(1)
+		}
 		if err := generateWordPressProject(projectRoot, ctx); err != nil {
 			_ = scaffolder.Rollback(projectRoot)
 			fmt.Fprintf(os.Stderr, "WordPress scaffolding failed: %v\n", err)
@@ -59,27 +63,54 @@ func main() {
 		return
 	}
 
+	// Separate mode: services land directly in cwd as named siblings (no shared parent).
+	// All other modes: services live inside a shared project root directory.
+	isSeparate := ctx.OutputMode == "separate"
 	frontendDir := "frontend"
 	backendDir := "backend"
-	if ctx.OutputMode == "separate" {
+	if isSeparate {
 		frontendDir = ctx.ProjectName + "-frontend"
 		backendDir = ctx.ProjectName + "-backend"
 	}
 
-	frontendEntry, _ := registry.FindByID(entries, ctx.FrontendID)
-	fmt.Printf("Scaffolding frontend (%s)...\n", frontendEntry.Name)
-	if err := runScaffold(ctx, frontendEntry, projectRoot, frontendDir); err != nil {
-		_ = scaffolder.Rollback(projectRoot)
-		fmt.Fprintf(os.Stderr, "Frontend scaffolding failed: %v\n", err)
-		os.Exit(1)
+	var projectRoot string
+	if !isSeparate {
+		projectRoot = ctx.ProjectName
+		if err := os.MkdirAll(projectRoot, 0o755); err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to create project dir: %v\n", err)
+			os.Exit(1)
+		}
 	}
 
-	backendEntry, _ := registry.FindByID(entries, ctx.BackendID)
-	fmt.Printf("Scaffolding backend (%s)...\n", backendEntry.Name)
-	if err := runScaffold(ctx, backendEntry, projectRoot, backendDir); err != nil {
-		_ = scaffolder.Rollback(projectRoot)
-		fmt.Fprintf(os.Stderr, "Backend scaffolding failed: %v\n", err)
-		os.Exit(1)
+	doRollback := func() {
+		if isSeparate {
+			_ = os.RemoveAll(frontendDir)
+			_ = os.RemoveAll(backendDir)
+		} else {
+			_ = scaffolder.Rollback(projectRoot)
+		}
+	}
+
+	var frontendEntry registry.Entry
+	if ctx.FrontendID != "" {
+		frontendEntry, _ = registry.FindByID(entries, ctx.FrontendID)
+		fmt.Printf("Scaffolding frontend (%s)...\n", frontendEntry.Name)
+		if err := runScaffold(ctx, frontendEntry, projectRoot, frontendDir); err != nil {
+			doRollback()
+			fmt.Fprintf(os.Stderr, "Frontend scaffolding failed: %v\n", err)
+			os.Exit(1)
+		}
+	}
+
+	var backendEntry registry.Entry
+	if ctx.BackendID != "" {
+		backendEntry, _ = registry.FindByID(entries, ctx.BackendID)
+		fmt.Printf("Scaffolding backend (%s)...\n", backendEntry.Name)
+		if err := runScaffold(ctx, backendEntry, projectRoot, backendDir); err != nil {
+			doRollback()
+			fmt.Fprintf(os.Stderr, "Backend scaffolding failed: %v\n", err)
+			os.Exit(1)
+		}
 	}
 
 	databaseEntry, _ := registry.FindByID(entries, ctx.DatabaseID)
@@ -88,7 +119,7 @@ func main() {
 	fmt.Println("Writing .env...")
 	envContent := wiring.GenerateEnv(ctx, isSQLite)
 	if err := os.WriteFile(filepath.Join(projectRoot, ".env"), []byte(envContent), 0o644); err != nil {
-		_ = scaffolder.Rollback(projectRoot)
+		doRollback()
 		fmt.Fprintf(os.Stderr, "Failed to write .env: %v\n", err)
 		os.Exit(1)
 	}
@@ -101,24 +132,24 @@ func main() {
 		}
 		composeContent, err := wiring.GenerateDockerCompose(wiring.DockerOptions{
 			Ctx:      ctx,
-			Frontend: *frontendEntry.Docker,
-			Backend:  *backendEntry.Docker,
+			Frontend: frontendEntry.Docker,
+			Backend:  backendEntry.Docker,
 			DB:       dbDocker,
 			IsSQLite: isSQLite,
 		})
 		if err != nil {
-			_ = scaffolder.Rollback(projectRoot)
+			doRollback()
 			fmt.Fprintf(os.Stderr, "Failed to generate docker-compose: %v\n", err)
 			os.Exit(1)
 		}
 		if err := os.WriteFile(filepath.Join(projectRoot, "docker-compose.yml"), []byte(composeContent), 0o644); err != nil {
-			_ = scaffolder.Rollback(projectRoot)
+			doRollback()
 			fmt.Fprintf(os.Stderr, "Failed to write docker-compose.yml: %v\n", err)
 			os.Exit(1)
 		}
 	}
 
-	if backendEntry.CorsPatch != nil {
+	if ctx.BackendID != "" && ctx.FrontendID != "" && backendEntry.CorsPatch != nil {
 		fmt.Println("Configuring CORS...")
 		corsFile := filepath.Join(projectRoot, backendDir, backendEntry.CorsPatch.File)
 		source, err := os.ReadFile(corsFile)
@@ -137,7 +168,7 @@ func main() {
 		}
 	}
 
-	if frontendEntry.HTTPClientPatch != nil {
+	if ctx.FrontendID != "" && frontendEntry.HTTPClientPatch != nil {
 		fmt.Println("Configuring HTTP client...")
 		apiURL := fmt.Sprintf("http://localhost:%d", ctx.BackendPort)
 		if ctx.EnvMode == "docker" {
@@ -150,17 +181,43 @@ func main() {
 		}
 	}
 
-	fmt.Printf("\nProject scaffolded successfully.\n\nNext steps:\n  cd %s\n\n", ctx.ProjectName)
+	fmt.Printf("\nProject scaffolded successfully.\n\n")
 	if ctx.EnvMode == "docker" {
-		fmt.Println("  docker-compose up -d")
-	} else {
-		fmt.Printf("  npm install    (in /%s)\n", frontendDir)
-		if backendEntry.Runtime == "go" {
-			fmt.Printf("  go run main.go (in /%s)\n", backendDir)
-		} else if backendEntry.Runtime == "python3" {
-			fmt.Printf("  source venv/bin/activate && python ... (in /%s)\n", backendDir)
+		if isSeparate {
+			fmt.Println("Next steps:")
+			fmt.Println("  docker-compose up -d")
 		} else {
-			fmt.Printf("  npm install && npm start (in /%s)\n", backendDir)
+			fmt.Printf("Next steps:\n  cd %s\n  docker-compose up -d\n", ctx.ProjectName)
+		}
+	} else {
+		if isSeparate {
+			fmt.Println("Next steps:")
+			if ctx.FrontendID != "" {
+				fmt.Printf("  cd %s && npm install\n", frontendDir)
+			}
+			if ctx.BackendID != "" {
+				if backendEntry.Runtime == "go" {
+					fmt.Printf("  cd %s && go run main.go\n", backendDir)
+				} else if backendEntry.Runtime == "python3" {
+					fmt.Printf("  cd %s && source venv/bin/activate && python ...\n", backendDir)
+				} else {
+					fmt.Printf("  cd %s && npm install && npm start\n", backendDir)
+				}
+			}
+		} else {
+			fmt.Printf("Next steps:\n  cd %s\n\n", ctx.ProjectName)
+			if ctx.FrontendID != "" {
+				fmt.Printf("  npm install    (in /%s)\n", frontendDir)
+			}
+			if ctx.BackendID != "" {
+				if backendEntry.Runtime == "go" {
+					fmt.Printf("  go run main.go (in /%s)\n", backendDir)
+				} else if backendEntry.Runtime == "python3" {
+					fmt.Printf("  source venv/bin/activate && python ... (in /%s)\n", backendDir)
+				} else {
+					fmt.Printf("  npm install && npm start (in /%s)\n", backendDir)
+				}
+			}
 		}
 	}
 }

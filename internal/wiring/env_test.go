@@ -10,6 +10,9 @@ import (
 
 func TestGenerateEnv_Postgres_LocalMode(t *testing.T) {
 	ctx := registry.WeldContext{
+		FrontendID:   "react",
+		BackendID:    "go-gin",
+		DatabaseID:   "postgres",
 		FrontendPort: 5173,
 		BackendPort:  8080,
 		DBHost:       "localhost",
@@ -33,6 +36,9 @@ func TestGenerateEnv_Postgres_LocalMode(t *testing.T) {
 
 func TestGenerateEnv_SQLite(t *testing.T) {
 	ctx := registry.WeldContext{
+		FrontendID:   "react",
+		BackendID:    "go-gin",
+		DatabaseID:   "sqlite",
 		FrontendPort: 5173,
 		BackendPort:  8080,
 		DBPath:       "./data/app.db",
@@ -49,6 +55,8 @@ func TestGenerateEnv_SQLite(t *testing.T) {
 
 func TestGenerateEnv_DockerMode_DBHost(t *testing.T) {
 	ctx := registry.WeldContext{
+		BackendID:  "go-gin",
+		DatabaseID: "postgres",
 		BackendPort: 8080,
 		DBHost:      "db",
 		DBPort:      5432,
@@ -60,5 +68,37 @@ func TestGenerateEnv_DockerMode_DBHost(t *testing.T) {
 	out := wiring.GenerateEnv(ctx, false)
 	if !strings.Contains(out, "DB_HOST=db") {
 		t.Error("docker mode should set DB_HOST=db")
+	}
+}
+
+func TestGenerateEnv_NoDatabase(t *testing.T) {
+	ctx := registry.WeldContext{
+		FrontendID:   "react",
+		BackendID:    "go-gin",
+		FrontendPort: 5173,
+		BackendPort:  8080,
+		EnvMode:      "local",
+	}
+	out := wiring.GenerateEnv(ctx, false)
+	if strings.Contains(out, "DB_") {
+		t.Error("no DB selected — env should not contain DB_ vars")
+	}
+}
+
+func TestGenerateEnv_FrontendOnly(t *testing.T) {
+	ctx := registry.WeldContext{
+		FrontendID:   "react",
+		FrontendPort: 5173,
+		EnvMode:      "local",
+	}
+	out := wiring.GenerateEnv(ctx, false)
+	if !strings.Contains(out, "FRONTEND_PORT=5173") {
+		t.Error("expected FRONTEND_PORT")
+	}
+	if strings.Contains(out, "BACKEND_PORT") {
+		t.Error("frontend-only should not contain BACKEND_PORT")
+	}
+	if strings.Contains(out, "VITE_API_URL") {
+		t.Error("frontend-only should not contain VITE_API_URL")
 	}
 }

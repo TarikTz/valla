@@ -61,6 +61,6 @@ func (m ConfirmSummary) View() string {
 		cancel = styleCancelBtn.Render("[ Cancel ]")
 	}
 	builder.WriteString(fmt.Sprintf("%s  %s\n", confirm, cancel))
-	builder.WriteString("\n" + styleMuted.Render("←→ choose  ·  enter to confirm") + "\n")
+	builder.WriteString("\n" + styleMuted.Render("←→ choose  ·  enter to confirm  ·  ctrl+c to exit") + "\n")
 	return builder.String()
 }

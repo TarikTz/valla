@@ -48,5 +48,5 @@ func (m RuntimeSelect) View() string {
 			s += "  " + styleOption.Render(option) + "\n"
 		}
 	}
-	return s + "\n" + styleMuted.Render("↑↓ navigate  ·  enter to select") + "\n"
+	return s + "\n" + styleMuted.Render("↑↓ navigate  ·  enter to select  ·  ctrl+c to exit") + "\n"
 }

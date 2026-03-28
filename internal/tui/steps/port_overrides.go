@@ -75,7 +75,7 @@ func (m PortOverrides) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m PortOverrides) View() string {
 	var builder strings.Builder
 	builder.WriteString(stylePrompt.Render("Configure ports") + "\n")
-	builder.WriteString(styleMuted.Render("tab/↑↓ navigate  ·  enter on last field to confirm") + "\n\n")
+	builder.WriteString(styleMuted.Render("tab/↑↓ navigate  ·  enter on last field to confirm  ·  ctrl+c to exit") + "\n\n")
 	for i, field := range m.fields {
 		var prefix string
 		if i == m.focused {

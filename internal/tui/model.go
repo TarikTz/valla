@@ -40,6 +40,8 @@ type Model struct {
 
 	selectedFERuntime string
 	selectedBERuntime string
+
+	confirmed bool
 }
 
 // New creates the root model. feRuntimes and beRuntimes are the detected available runtimes.
@@ -95,6 +97,28 @@ func (m Model) handleStepDone(msg steps.StepDone) (tea.Model, tea.Cmd) {
 			m.current = m.buildPortOverrides()
 			return m, m.current.Init()
 		}
+		if choice == "Frontend only" {
+			if len(m.feRuntimes) == 0 {
+				return m, func() tea.Msg {
+					return ErrMsg{Err: fmt.Errorf("no supported frontend runtimes detected; install Node.js or Bun to continue")}
+				}
+			}
+			m.ctx.OutputMode = "frontend-only"
+			m.phase = phaseFrontendRuntime
+			m.current = steps.NewRuntimeSelect("Select frontend runtime:", m.feRuntimes)
+			return m, m.current.Init()
+		}
+		if choice == "Backend only" {
+			if len(m.beRuntimes) == 0 {
+				return m, func() tea.Msg {
+					return ErrMsg{Err: fmt.Errorf("no supported backend runtimes detected; install Node.js, Go, or Python to continue")}
+				}
+			}
+			m.ctx.OutputMode = "backend-only"
+			m.phase = phaseBackendRuntime
+			m.current = steps.NewRuntimeSelect("Select backend runtime:", m.beRuntimes)
+			return m, m.current.Init()
+		}
 		if len(m.feRuntimes) == 0 || len(m.beRuntimes) == 0 {
 			return m, func() tea.Msg {
 				return ErrMsg{Err: fmt.Errorf("no supported runtimes detected; install Node.js, Go, or Python to continue")}
@@ -117,8 +141,13 @@ func (m Model) handleStepDone(msg steps.StepDone) (tea.Model, tea.Cmd) {
 		m.ctx.FrontendID = id
 		entry, _ := registry.FindByID(m.entries, id)
 		m.ctx.FrontendPort = entry.DefaultPort
-		m.phase = phaseBackendRuntime
-		m.current = steps.NewRuntimeSelect("Select backend runtime:", m.beRuntimes)
+		if m.ctx.OutputMode == "frontend-only" {
+			m.phase = phaseDatabaseSelect
+			m.current = steps.NewDatabaseSelect(m.databaseDisplayNames())
+		} else {
+			m.phase = phaseBackendRuntime
+			m.current = steps.NewRuntimeSelect("Select backend runtime:", m.beRuntimes)
+		}
 	case phaseBackendRuntime:
 		m.selectedBERuntime = msg.Value.(string)
 		names, _ := m.frameworkDisplayNames("backend", m.selectedBERuntime)
@@ -134,13 +163,15 @@ func (m Model) handleStepDone(msg steps.StepDone) (tea.Model, tea.Cmd) {
 	case phaseDatabaseSelect:
 		id := m.databaseIDFromName(msg.Value.(string))
 		m.ctx.DatabaseID = id
-		entry, _ := registry.FindByID(m.entries, id)
-		if entry.SQLite {
-			m.ctx.DBPath = entry.DBPathDefault
-		} else {
-			m.ctx.DBPort = entry.DefaultPort
-			m.ctx.DBUser = "postgres"
-			m.ctx.DBPassword = "postgres"
+		if id != "" {
+			entry, _ := registry.FindByID(m.entries, id)
+			if entry.SQLite {
+				m.ctx.DBPath = entry.DBPathDefault
+			} else {
+				m.ctx.DBPort = entry.DefaultPort
+				m.ctx.DBUser = "postgres"
+				m.ctx.DBPassword = "postgres"
+			}
 		}
 		m.phase = phaseEnvMode
 		m.current = steps.NewEnvMode()
@@ -162,6 +193,7 @@ func (m Model) handleStepDone(msg steps.StepDone) (tea.Model, tea.Cmd) {
 		m.phase = phaseConfirm
 		m.current = steps.NewConfirmSummary(m.summaryLines())
 	case phaseConfirm:
+		m.confirmed = true
 		return m, tea.Quit
 	}
 	return m, m.current.Init()
@@ -189,9 +221,9 @@ func (m Model) frameworkIDFromName(entryType, runtime, name string) string {
 	return ""
 }
 
-// databaseDisplayNames returns display names for database selection.
+// databaseDisplayNames returns display names for database selection, with None first.
 func (m Model) databaseDisplayNames() []string {
-	var names []string
+	names := []string{"None"}
 	for _, entry := range m.entries {
 		if entry.Type == "database" {
 			names = append(names, entry.Name)
@@ -201,7 +233,11 @@ func (m Model) databaseDisplayNames() []string {
 }
 
 // databaseIDFromName resolves a database display name to a registry entry ID.
+// Returns "" for "None".
 func (m Model) databaseIDFromName(name string) string {
+	if name == "None" {
+		return ""
+	}
 	for _, entry := range m.entries {
 		if entry.Type == "database" && entry.Name == name {
 			return entry.ID
@@ -217,17 +253,22 @@ func (m Model) buildPortOverrides() steps.PortOverrides {
 			makePortField("MySQL Port", m.ctx.DBPort, false),
 		})
 	}
-	dbEntry, _ := registry.FindByID(m.entries, m.ctx.DatabaseID)
-	fields := []steps.PortField{
-		makePortField("Frontend Port", m.ctx.FrontendPort, false),
-		makePortField("Backend Port", m.ctx.BackendPort, false),
+	var fields []steps.PortField
+	if m.ctx.FrontendID != "" {
+		fields = append(fields, makePortField("Frontend Port", m.ctx.FrontendPort, false))
 	}
-	if dbEntry.SQLite {
-		input := textinput.New()
-		input.SetValue(m.ctx.DBPath)
-		fields = append(fields, steps.PortField{Label: "DB File Path", IsPath: true, Input: input})
-	} else {
-		fields = append(fields, makePortField("DB Port", m.ctx.DBPort, false))
+	if m.ctx.BackendID != "" {
+		fields = append(fields, makePortField("Backend Port", m.ctx.BackendPort, false))
+	}
+	if m.ctx.DatabaseID != "" {
+		dbEntry, _ := registry.FindByID(m.entries, m.ctx.DatabaseID)
+		if dbEntry.SQLite {
+			input := textinput.New()
+			input.SetValue(m.ctx.DBPath)
+			fields = append(fields, steps.PortField{Label: "DB File Path", IsPath: true, Input: input})
+		} else {
+			fields = append(fields, makePortField("DB Port", m.ctx.DBPort, false))
+		}
 	}
 	return steps.NewPortOverrides(fields)
 }
@@ -254,17 +295,20 @@ func (m *Model) applyPortOverrides(result steps.PortOverrideResult, isSQLite boo
 		}
 		return
 	}
-	if len(result.Values) >= 1 {
-		m.ctx.FrontendPort = parseInt(result.Values[0], m.ctx.FrontendPort)
+	idx := 0
+	if m.ctx.FrontendID != "" && idx < len(result.Values) {
+		m.ctx.FrontendPort = parseInt(result.Values[idx], m.ctx.FrontendPort)
+		idx++
 	}
-	if len(result.Values) >= 2 {
-		m.ctx.BackendPort = parseInt(result.Values[1], m.ctx.BackendPort)
+	if m.ctx.BackendID != "" && idx < len(result.Values) {
+		m.ctx.BackendPort = parseInt(result.Values[idx], m.ctx.BackendPort)
+		idx++
 	}
-	if len(result.Values) >= 3 {
+	if m.ctx.DatabaseID != "" && idx < len(result.Values) {
 		if isSQLite {
-			m.ctx.DBPath = result.Values[2]
+			m.ctx.DBPath = result.Values[idx]
 		} else {
-			m.ctx.DBPort = parseInt(result.Values[2], m.ctx.DBPort)
+			m.ctx.DBPort = parseInt(result.Values[idx], m.ctx.DBPort)
 		}
 	}
 }
@@ -280,13 +324,28 @@ func (m Model) summaryLines() []string {
 			fmt.Sprintf("DB name:        %s", m.ctx.DBName),
 		}
 	}
-	return []string{
+	lines := []string{
 		fmt.Sprintf("Project:    %s", m.ctx.ProjectName),
 		fmt.Sprintf("Structure:  %s", m.ctx.OutputMode),
 		fmt.Sprintf("Env mode:   %s", m.ctx.EnvMode),
-		fmt.Sprintf("FE port:    %d", m.ctx.FrontendPort),
-		fmt.Sprintf("BE port:    %d", m.ctx.BackendPort),
 	}
+	if m.ctx.FrontendID != "" {
+		lines = append(lines, fmt.Sprintf("FE port:    %d", m.ctx.FrontendPort))
+	}
+	if m.ctx.BackendID != "" {
+		lines = append(lines, fmt.Sprintf("BE port:    %d", m.ctx.BackendPort))
+	}
+	if m.ctx.DatabaseID != "" {
+		dbEntry, _ := registry.FindByID(m.entries, m.ctx.DatabaseID)
+		if dbEntry.SQLite {
+			lines = append(lines, fmt.Sprintf("DB path:    %s", m.ctx.DBPath))
+		} else {
+			lines = append(lines, fmt.Sprintf("DB port:    %d", m.ctx.DBPort))
+		}
+	} else {
+		lines = append(lines, "Database:   none")
+	}
+	return lines
 }
 
 func (m Model) View() string {
@@ -298,6 +357,10 @@ func (m Model) View() string {
 
 // Context returns the final WeldContext after the TUI completes.
 func (m Model) Context() registry.WeldContext { return m.ctx }
+
+// Confirmed reports whether the user completed and confirmed the flow.
+// Returns false if the user pressed Ctrl+C or cancelled at any point.
+func (m Model) Confirmed() bool { return m.confirmed }
 
 func wordpressDBName(projectName string) string {
 	var builder strings.Builder
