@@ -27,8 +27,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	available := detector.Detect([]string{"go", "node"})
-	feRuntimes := detector.FilterByRuntime([]string{"node"}, available)
+	available := detector.Detect([]string{"go", "node", "bun"})
+	feRuntimes := detector.FilterByRuntime([]string{"node", "bun"}, available)
 	beRuntimes := detector.FilterByRuntime([]string{"go", "node"}, available)
 
 	model := itui.New(entries, feRuntimes, beRuntimes)

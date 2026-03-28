@@ -1,0 +1,17 @@
+id: angular-bun
+name: Angular
+type: frontend
+runtime: bun
+group: Angular
+requires_runtime: bun
+scaffold_cmd: "bunx @angular/cli@latest new {{.ScaffoldName}} --defaults --skip-git --skip-install --package-manager bun --routing --style css"
+default_port: 4200
+http_client_patch:
+  file: src/app/api.ts
+  mode: create
+  template: |
+    export const API_BASE = 'http://localhost:{{.BackendPort}}'
+docker:
+  image: oven/bun:1
+  build_context: ./frontend
+  dockerfile: internal/registry/data/dockerfiles/bun-angular-frontend.Dockerfile
