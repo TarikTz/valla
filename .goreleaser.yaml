@@ -34,7 +34,7 @@ checksum:
 release:
   github:
     owner: tariktz
-    name: valla-cli
+    name: valla
   draft: false
   prerelease: auto
 
