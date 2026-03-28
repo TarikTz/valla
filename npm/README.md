@@ -57,4 +57,4 @@ Install only what your selected stack needs:
 
 ## More
 
-Full documentation, architecture details, and contribution guide: [github.com/tariktz/valla-cli](https://github.com/tariktz/valla-cli)
+Full documentation, architecture details, and contribution guide: [github.com/tariktz/valla](https://github.com/tariktz/valla)
