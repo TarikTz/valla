@@ -40,13 +40,13 @@ func (m RuntimeSelect) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m RuntimeSelect) View() string {
-	s := m.prompt + "\n\n"
+	s := stylePrompt.Render(m.prompt) + "\n\n"
 	for i, option := range m.options {
-		cursor := "  "
 		if i == m.cursor {
-			cursor = "> "
+			s += styleCursor.Render("›") + " " + styleSelected.Render(option) + "\n"
+		} else {
+			s += "  " + styleOption.Render(option) + "\n"
 		}
-		s += cursor + option + "\n"
 	}
-	return s
+	return s + "\n" + styleMuted.Render("↑↓ navigate  ·  enter to select") + "\n"
 }

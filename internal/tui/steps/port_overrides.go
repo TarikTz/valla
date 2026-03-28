@@ -74,11 +74,14 @@ func (m PortOverrides) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m PortOverrides) View() string {
 	var builder strings.Builder
-	builder.WriteString("Configure ports (Tab to navigate, Enter on last field to confirm):\n\n")
+	builder.WriteString(stylePrompt.Render("Configure ports") + "\n")
+	builder.WriteString(styleMuted.Render("tab/↑↓ navigate  ·  enter on last field to confirm") + "\n\n")
 	for i, field := range m.fields {
-		prefix := "  "
+		var prefix string
 		if i == m.focused {
-			prefix = "> "
+			prefix = styleCursor.Render("›") + " "
+		} else {
+			prefix = "  "
 		}
 		label := field.Label
 		if field.IsPath {
@@ -86,7 +89,13 @@ func (m PortOverrides) View() string {
 		} else {
 			label += " (port)"
 		}
-		builder.WriteString(fmt.Sprintf("%s%-20s %s\n", prefix, label, field.Input.View()))
+		var styledLabel string
+		if i == m.focused {
+			styledLabel = styleSelected.Render(fmt.Sprintf("%-22s", label))
+		} else {
+			styledLabel = styleLabel.Render(fmt.Sprintf("%-22s", label))
+		}
+		builder.WriteString(fmt.Sprintf("%s%s %s\n", prefix, styledLabel, field.Input.View()))
 	}
 	return builder.String()
 }

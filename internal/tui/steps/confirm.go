@@ -41,18 +41,26 @@ func (m ConfirmSummary) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m ConfirmSummary) View() string {
 	var builder strings.Builder
-	builder.WriteString("Summary:\n\n")
+	builder.WriteString(stylePrompt.Render("Summary") + "\n\n")
 	for _, line := range m.lines {
-		builder.WriteString("  " + line + "\n")
+		parts := strings.SplitN(line, ":", 2)
+		if len(parts) == 2 {
+			builder.WriteString("  " + styleLabel.Render(parts[0]+":") + styleSelected.Render(parts[1]) + "\n")
+		} else {
+			builder.WriteString("  " + styleOption.Render(line) + "\n")
+		}
 	}
 	builder.WriteString("\n")
-	confirm := "[ Confirm ]"
-	cancel := "[ Cancel ]"
+
+	var confirm, cancel string
 	if m.cursor == 0 {
-		confirm = "[>Confirm<]"
+		confirm = styleConfirmBtn.Render("[ Confirm ]")
+		cancel = styleInactiveBtn.Render("[ Cancel ]")
 	} else {
-		cancel = "[>Cancel<]"
+		confirm = styleInactiveBtn.Render("[ Confirm ]")
+		cancel = styleCancelBtn.Render("[ Cancel ]")
 	}
 	builder.WriteString(fmt.Sprintf("%s  %s\n", confirm, cancel))
+	builder.WriteString("\n" + styleMuted.Render("←→ choose  ·  enter to confirm") + "\n")
 	return builder.String()
 }

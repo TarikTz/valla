@@ -38,5 +38,7 @@ func (m ProjectName) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m ProjectName) View() string {
-	return "Project name: " + m.input.View() + "\n"
+	label := stylePrompt.Render("Project name")
+	hint := styleMuted.Render("  ·  enter a name for your new project")
+	return label + hint + "\n\n" + m.input.View() + "\n\n" + styleMuted.Render("enter to continue") + "\n"
 }
