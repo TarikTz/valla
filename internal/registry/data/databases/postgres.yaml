@@ -1,0 +1,10 @@
+id: postgres
+name: PostgreSQL
+type: database
+default_port: 5432
+docker:
+  image: postgres:16-alpine
+  env_vars:
+    POSTGRES_USER: "{{.DBUser}}"
+    POSTGRES_PASSWORD: "{{.DBPassword}}"
+    POSTGRES_DB: "{{.DBName}}"

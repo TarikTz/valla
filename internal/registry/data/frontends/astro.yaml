@@ -1,0 +1,19 @@
+id: astro
+name: Astro
+type: frontend
+runtime: node
+group: Astro
+requires_runtime: node
+scaffold_cmd: "npm create astro@latest {{.ScaffoldName}} -- --template basics --no-install --no-git --yes"
+default_port: 4321
+http_client_patch:
+  file: src/lib/api.ts
+  mode: create
+  template: |
+    export const API_BASE = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:{{.BackendPort}}'
+docker:
+  image: node:20-alpine
+  build_context: ./frontend
+  dockerfile: internal/registry/data/dockerfiles/node-frontend.Dockerfile
+  env_vars:
+    PUBLIC_API_URL: "http://localhost:{{.BackendPort}}"

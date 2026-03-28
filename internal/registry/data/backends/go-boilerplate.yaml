@@ -1,0 +1,28 @@
+id: go-boilerplate
+name: Go (Boilerplate)
+type: backend
+runtime: go
+group: Go
+requires_runtime: go
+scaffold_cmd: ""
+builtin_template: internal/registry/data/templates/backends/go-boilerplate
+default_port: 8080
+env_vars:
+  - PORT
+  - DB_HOST
+  - DB_PORT
+  - DB_USER
+  - DB_PASSWORD
+  - DB_NAME
+cors_patch:
+  file: main.go
+  marker: "// valla:cors"
+  template: |
+    // CORS: allow requests from frontend
+    w.Header().Set("Access-Control-Allow-Origin", "http://localhost:{{.FrontendPort}}")
+    w.Header().Set("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS")
+    w.Header().Set("Access-Control-Allow-Headers", "Origin,Content-Type,Authorization")
+docker:
+  image: golang:1.22-alpine
+  build_context: ./backend
+  dockerfile: internal/registry/data/dockerfiles/go.Dockerfile

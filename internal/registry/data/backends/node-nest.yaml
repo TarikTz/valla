@@ -1,0 +1,27 @@
+id: node-nest
+name: Node.js (NestJS)
+type: backend
+runtime: node
+group: Node.js
+requires_runtime: node
+scaffold_cmd: "npx --yes @nestjs/cli new {{.ScaffoldName}} --package-manager npm --skip-git"
+default_port: 3000
+env_vars:
+  - PORT
+  - DB_HOST
+  - DB_PORT
+  - DB_USER
+  - DB_PASSWORD
+  - DB_NAME
+cors_patch:
+  file: src/main.ts
+  marker: "// valla:cors"
+  template: |
+    app.enableCors({ origin: 'http://localhost:{{.FrontendPort}}' })
+post_scaffold_files:
+  - path: src/main.ts
+    template: internal/registry/data/post-scaffold/node-nest-src-main.ts.tmpl
+docker:
+  image: node:20-alpine
+  build_context: ./backend
+  dockerfile: internal/registry/data/dockerfiles/node-backend.Dockerfile

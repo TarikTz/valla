@@ -1,0 +1,22 @@
+package main
+
+import (
+	"os"
+
+	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/cors"
+)
+
+func main() {
+	app := fiber.New()
+
+	// valla:cors
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+	app.Get("/health", func(c *fiber.Ctx) error {
+		return c.JSON(fiber.Map{"status": "ok"})
+	})
+	app.Listen(":" + port)
+}

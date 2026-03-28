@@ -1,0 +1,62 @@
+package registry_test
+
+import (
+	"io/fs"
+	"testing"
+
+	"github.com/tariktz/valla-cli/internal/registry"
+)
+
+func TestLoad_ReturnsEntries(t *testing.T) {
+	entries, err := registry.Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+	if len(entries) == 0 {
+		t.Fatal("expected at least one registry entry, got 0")
+	}
+}
+
+func TestLoad_FindByID(t *testing.T) {
+	entries, _ := registry.Load()
+	entry, ok := registry.FindByID(entries, "react")
+	if !ok {
+		t.Fatal("expected to find entry with id=react")
+	}
+	if entry.Type != "frontend" {
+		t.Errorf("expected type=frontend, got %s", entry.Type)
+	}
+	if entry.DefaultPort != 5173 {
+		t.Errorf("expected DefaultPort=5173, got %d", entry.DefaultPort)
+	}
+}
+
+func TestLoad_FindByType(t *testing.T) {
+	entries, _ := registry.Load()
+	frontends := registry.FindByType(entries, "frontend")
+	if len(frontends) == 0 {
+		t.Fatal("expected at least one frontend entry")
+	}
+}
+
+func TestReadEmbeddedHelpers_NormalizeSourcePaths(t *testing.T) {
+	fileBytes, err := registry.ReadEmbeddedFile("internal/registry/data/frontends/react.yaml")
+	if err != nil {
+		t.Fatalf("ReadEmbeddedFile() error: %v", err)
+	}
+	if len(fileBytes) == 0 {
+		t.Fatal("expected embedded file content")
+	}
+
+	dirFS, err := registry.ReadEmbeddedDir("internal/registry/data/templates/backends/node-boilerplate")
+	if err != nil {
+		t.Fatalf("ReadEmbeddedDir() error: %v", err)
+	}
+	entries, err := fs.ReadDir(dirFS, ".")
+	if err != nil {
+		t.Fatalf("ReadDir() error: %v", err)
+	}
+	if len(entries) == 0 {
+		t.Fatal("expected embedded directory entries")
+	}
+}

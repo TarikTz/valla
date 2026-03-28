@@ -1,0 +1,19 @@
+id: vue
+name: Vue
+type: frontend
+runtime: node
+group: Vue
+requires_runtime: node
+scaffold_cmd: "npm create vue@latest {{.ScaffoldName}} -- --default"
+default_port: 5173
+http_client_patch:
+  file: src/api.ts
+  mode: create
+  template: |
+    export const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:{{.BackendPort}}'
+docker:
+  image: node:20-alpine
+  build_context: ./frontend
+  dockerfile: internal/registry/data/dockerfiles/node-frontend.Dockerfile
+  env_vars:
+    VITE_API_URL: "http://localhost:{{.BackendPort}}"

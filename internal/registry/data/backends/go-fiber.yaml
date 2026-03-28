@@ -1,0 +1,31 @@
+id: go-fiber
+name: Go (Fiber)
+type: backend
+runtime: go
+group: Go
+requires_runtime: go
+scaffold_cmd: "mkdir {{.ScaffoldName}} && cd {{.ScaffoldName}} && go mod init {{.ProjectName}}-backend && go get github.com/gofiber/fiber/v2 && go get github.com/gofiber/fiber/v2/middleware/cors"
+default_port: 8080
+env_vars:
+  - PORT
+  - DB_HOST
+  - DB_PORT
+  - DB_USER
+  - DB_PASSWORD
+  - DB_NAME
+cors_patch:
+  file: main.go
+  marker: "// valla:cors"
+  template: |
+    app.Use(cors.New(cors.Config{
+        AllowOrigins: "http://localhost:{{.FrontendPort}}",
+        AllowMethods: "GET,POST,PUT,DELETE,OPTIONS",
+        AllowHeaders: "Origin,Content-Type,Authorization",
+    }))
+post_scaffold_files:
+  - path: main.go
+    template: internal/registry/data/post-scaffold/go-fiber-main.go.tmpl
+docker:
+  image: golang:1.22-alpine
+  build_context: ./backend
+  dockerfile: internal/registry/data/dockerfiles/go.Dockerfile
