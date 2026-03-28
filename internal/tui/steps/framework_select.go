@@ -4,5 +4,5 @@ package steps
 type FrameworkSelect = RuntimeSelect
 
 func NewFrameworkSelect(prompt string, options []string) FrameworkSelect {
-	return NewRuntimeSelect(prompt, options)
+	return NewRuntimeSelect(prompt, runtimeOptionsAll(options))
 }

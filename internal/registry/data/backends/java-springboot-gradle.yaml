@@ -1,0 +1,37 @@
+id: java-springboot-gradle
+name: Spring Boot (Gradle)
+type: backend
+runtime: java
+group: Java
+requires_runtime: java
+scaffold_cmd: "curl -f https://start.spring.io/starter.tgz -d type=gradle-project -d language=java -d artifactId={{.JavaArtifactID}} -d name={{.ProjectName}}-backend -d dependencies=web | tar -xzvf - -C . && mv {{.JavaArtifactID}} {{.ScaffoldName}}"
+default_port: 8080
+env_vars:
+  - PORT
+  - DB_HOST
+  - DB_PORT
+  - DB_USER
+  - DB_PASSWORD
+  - DB_NAME
+cors_patch:
+  file: src/main/java/com/example/Application.java
+  marker: "// valla:cors"
+  template: |
+    @Bean
+    public WebMvcConfigurer corsConfigurer() {
+        return new WebMvcConfigurer() {
+            @Override
+            public void addCorsMappings(CorsRegistry registry) {
+                registry.addMapping("/**")
+                    .allowedOrigins("http://localhost:{{.FrontendPort}}")
+                    .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS");
+            }
+        };
+    }
+post_scaffold_files:
+  - path: src/main/java/com/example/Application.java
+    template: internal/registry/data/post-scaffold/java-springboot-application.java.tmpl
+docker:
+  image: eclipse-temurin:21-jre-alpine
+  build_context: ./backend
+  dockerfile: internal/registry/data/dockerfiles/java-springboot-gradle.Dockerfile
