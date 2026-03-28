@@ -3,7 +3,8 @@ package registry
 // WeldContext holds all user choices and is used for template rendering throughout.
 type WeldContext struct {
 	ProjectName  string // final project name (step 1)
-	ScaffoldName string // temporary name passed to scaffold_cmd (e.g. "valla-tmp-frontend")
+	ScaffoldName   string // temporary name passed to scaffold_cmd (e.g. "valla-tmp-frontend")
+	JavaArtifactID string // ScaffoldName with hyphens replaced by underscores (valid Java artifact ID)
 	FrontendID   string // selected frontend registry entry ID (e.g. "react")
 	BackendID    string // selected backend registry entry ID (e.g. "go-gin")
 	DatabaseID   string // selected database registry entry ID (e.g. "postgres")
