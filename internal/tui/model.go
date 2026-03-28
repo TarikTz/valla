@@ -111,7 +111,7 @@ func (m Model) handleStepDone(msg steps.StepDone) (tea.Model, tea.Cmd) {
 		if choice == "Backend only" {
 			if len(m.beRuntimes) == 0 {
 				return m, func() tea.Msg {
-					return ErrMsg{Err: fmt.Errorf("no supported backend runtimes detected; install Node.js, Go, or Python to continue")}
+					return ErrMsg{Err: fmt.Errorf("no supported backend runtimes detected; install Node.js, Go, Python, .NET, or Java (Maven/Gradle) to continue")}
 				}
 			}
 			m.ctx.OutputMode = "backend-only"
@@ -121,7 +121,7 @@ func (m Model) handleStepDone(msg steps.StepDone) (tea.Model, tea.Cmd) {
 		}
 		if len(m.feRuntimes) == 0 || len(m.beRuntimes) == 0 {
 			return m, func() tea.Msg {
-				return ErrMsg{Err: fmt.Errorf("no supported runtimes detected; install Node.js, Go, or Python to continue")}
+				return ErrMsg{Err: fmt.Errorf("no supported runtimes detected; install Node.js, Go, Python, .NET, or Java (Maven/Gradle) to continue")}
 			}
 		}
 		if choice == "Monorepo" {
@@ -150,9 +150,9 @@ func (m Model) handleStepDone(msg steps.StepDone) (tea.Model, tea.Cmd) {
 		}
 	case phaseBackendRuntime:
 		m.selectedBERuntime = msg.Value.(string)
-		names, _ := m.frameworkDisplayNames("backend", m.selectedBERuntime)
+		grouped := m.frameworkGroupedOptions("backend", m.selectedBERuntime)
 		m.phase = phaseBackendFramework
-		m.current = steps.NewFrameworkSelect("Select backend framework:", names)
+		m.current = steps.NewGroupedRuntimeSelect("Select backend framework:", grouped)
 	case phaseBackendFramework:
 		id := m.frameworkIDFromName("backend", m.selectedBERuntime, msg.Value.(string))
 		m.ctx.BackendID = id
@@ -209,6 +209,17 @@ func (m Model) frameworkDisplayNames(entryType, runtime string) (names []string,
 		}
 	}
 	return
+}
+
+// frameworkGroupedOptions returns GroupedOptions for use with GroupedRuntimeSelect.
+func (m Model) frameworkGroupedOptions(entryType, runtime string) []steps.GroupedOption {
+	var opts []steps.GroupedOption
+	for _, entry := range m.entries {
+		if entry.Type == entryType && entry.Runtime == runtime {
+			opts = append(opts, steps.GroupedOption{Name: entry.Name, Group: entry.Group})
+		}
+	}
+	return opts
 }
 
 // frameworkIDFromName resolves a display name back to a registry entry ID.
