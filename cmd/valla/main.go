@@ -27,9 +27,18 @@ func main() {
 		os.Exit(1)
 	}
 
-	available := detector.Detect([]string{"go", "node", "bun", "python3"})
+	available := detector.Detect([]string{"go", "node", "bun", "python3", "dotnet"})
+	// "java" is not a binary name so it cannot be in the Detect call above.
+	// DetectWithAliases maps mvn/gradle presence to the logical "java" key.
+	// This merge is safe because "java" is guaranteed absent from available above.
+	javaAvailable := detector.DetectWithAliases(map[string][]string{
+		"java": {"mvn", "gradle"},
+	})
+	for k, v := range javaAvailable {
+		available[k] = v
+	}
 	feRuntimes := detector.FilterByRuntime([]string{"node", "bun"}, available)
-	beRuntimes := detector.FilterByRuntime([]string{"go", "node", "python3"}, available)
+	beRuntimes := detector.FilterByRuntime([]string{"go", "node", "python3", "dotnet", "java"}, available)
 
 	model := itui.New(entries, feRuntimes, beRuntimes)
 	program := tea.NewProgram(model)
