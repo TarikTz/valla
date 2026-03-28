@@ -93,6 +93,33 @@ func TestLoad_SpringBootEntries(t *testing.T) {
 	}
 }
 
+func TestLoad_QuarkusEntries(t *testing.T) {
+	entries, err := registry.Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+	ids := []string{"java-quarkus-maven", "java-quarkus-gradle"}
+	for _, id := range ids {
+		entry, ok := registry.FindByID(entries, id)
+		if !ok {
+			t.Errorf("expected to find entry id=%s", id)
+			continue
+		}
+		if entry.Runtime != "java" {
+			t.Errorf("%s: expected runtime=java, got %s", id, entry.Runtime)
+		}
+		if entry.CorsPatch == nil {
+			t.Errorf("%s: expected cors_patch to be set", id)
+		}
+		if entry.CorsPatch != nil && entry.CorsPatch.File != "src/main/resources/application.properties" {
+			t.Errorf("%s: cors_patch.file expected application.properties path, got %s", id, entry.CorsPatch.File)
+		}
+		if len(entry.PostScaffoldFiles) != 2 {
+			t.Errorf("%s: expected 2 post_scaffold_files, got %d", id, len(entry.PostScaffoldFiles))
+		}
+	}
+}
+
 func TestReadEmbeddedHelpers_NormalizeSourcePaths(t *testing.T) {
 	fileBytes, err := registry.ReadEmbeddedFile("internal/registry/data/frontends/react.yaml")
 	if err != nil {
