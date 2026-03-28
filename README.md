@@ -7,8 +7,8 @@ Stop assembling stacks by hand. `valla-cli` scaffolds frontend, backend, databas
 **Run from source:**
 
 ```bash
-git clone https://github.com/tariktz/valla-cli
-cd valla-cli
+git clone https://github.com/tariktz/valla
+cd valla
 go run ./cmd/valla
 ```
 
