@@ -9,7 +9,7 @@ const path = require('path')
 
 const VERSION = require('./package.json').version
 const ORG = 'tariktz'
-const REPO = 'valla-cli'
+const REPO = 'valla'
 
 function getPlatform() {
   const platform = process.platform
