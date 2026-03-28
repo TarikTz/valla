@@ -14,6 +14,7 @@ cover.out
 
 # Node dependencies
 npm/node_modules/
+npm/*.tgz
 
 # Build and temp directories
 bin/
