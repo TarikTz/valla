@@ -227,6 +227,7 @@ func main() {
 func runScaffold(ctx registry.WeldContext, entry registry.Entry, root, targetDir string) error {
 	tempName := scaffoldTempName(targetDir)
 	ctx.ScaffoldName = tempName
+	ctx.JavaArtifactID = strings.ReplaceAll(tempName, "-", "_")
 
 	if entry.ScaffoldCmd != "" {
 		rendered, err := scaffolder.ApplyTemplate(entry.ScaffoldCmd, ctx)
