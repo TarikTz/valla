@@ -205,11 +205,25 @@ func main() {
 				fmt.Printf("  cd %s && npm install\n", frontendDir)
 			}
 			if ctx.BackendID != "" {
-				if backendEntry.Runtime == "go" {
+				switch backendEntry.Runtime {
+				case "go":
 					fmt.Printf("  cd %s && go run main.go\n", backendDir)
-				} else if backendEntry.Runtime == "python3" {
+				case "python3":
 					fmt.Printf("  cd %s && source venv/bin/activate && python ...\n", backendDir)
-				} else {
+				case "dotnet":
+					fmt.Printf("  cd %s && dotnet run\n", backendDir)
+				case "java":
+					switch backendEntry.ID {
+					case "java-springboot-maven":
+						fmt.Printf("  cd %s && mvn spring-boot:run\n", backendDir)
+					case "java-springboot-gradle":
+						fmt.Printf("  cd %s && ./gradlew bootRun\n", backendDir)
+					case "java-quarkus-maven":
+						fmt.Printf("  cd %s && mvn quarkus:dev\n", backendDir)
+					case "java-quarkus-gradle":
+						fmt.Printf("  cd %s && ./gradlew quarkusDev\n", backendDir)
+					}
+				default:
 					fmt.Printf("  cd %s && npm install && npm start\n", backendDir)
 				}
 			}
@@ -219,11 +233,25 @@ func main() {
 				fmt.Printf("  npm install    (in /%s)\n", frontendDir)
 			}
 			if ctx.BackendID != "" {
-				if backendEntry.Runtime == "go" {
+				switch backendEntry.Runtime {
+				case "go":
 					fmt.Printf("  go run main.go (in /%s)\n", backendDir)
-				} else if backendEntry.Runtime == "python3" {
+				case "python3":
 					fmt.Printf("  source venv/bin/activate && python ... (in /%s)\n", backendDir)
-				} else {
+				case "dotnet":
+					fmt.Printf("  dotnet run (in /%s)\n", backendDir)
+				case "java":
+					switch backendEntry.ID {
+					case "java-springboot-maven":
+						fmt.Printf("  mvn spring-boot:run (in /%s)\n", backendDir)
+					case "java-springboot-gradle":
+						fmt.Printf("  ./gradlew bootRun (in /%s)\n", backendDir)
+					case "java-quarkus-maven":
+						fmt.Printf("  mvn quarkus:dev (in /%s)\n", backendDir)
+					case "java-quarkus-gradle":
+						fmt.Printf("  ./gradlew quarkusDev (in /%s)\n", backendDir)
+					}
+				default:
 					fmt.Printf("  npm install && npm start (in /%s)\n", backendDir)
 				}
 			}
