@@ -13,17 +13,6 @@ env_vars:
   - DB_USER
   - DB_PASSWORD
   - DB_NAME
-cors_patch:
-  file: Program.cs
-  marker: "// valla:cors"
-  template: |
-    builder.Services.AddCors(options =>
-    {
-        options.AddPolicy("VallaPolicy", policy =>
-            policy.WithOrigins("http://localhost:{{.FrontendPort}}")
-                  .AllowAnyMethod()
-                  .AllowAnyHeader());
-    });
 post_scaffold_files:
   - path: Program.cs
     template: internal/registry/data/post-scaffold/dotnet-webapi-program.cs.tmpl

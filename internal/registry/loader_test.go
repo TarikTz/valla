@@ -57,9 +57,6 @@ func TestLoad_DotNetEntries(t *testing.T) {
 		if entry.DefaultPort != 5000 {
 			t.Errorf("%s: expected port=5000, got %d", id, entry.DefaultPort)
 		}
-		if entry.CorsPatch == nil {
-			t.Errorf("%s: expected cors_patch to be set", id)
-		}
 		if entry.Docker == nil {
 			t.Errorf("%s: expected docker config to be set", id)
 		}
