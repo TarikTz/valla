@@ -39,6 +39,36 @@ func TestLoad_FindByType(t *testing.T) {
 	}
 }
 
+func TestLoad_DotNetEntries(t *testing.T) {
+	entries, err := registry.Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+	ids := []string{"dotnet-webapi", "dotnet-minimal"}
+	for _, id := range ids {
+		entry, ok := registry.FindByID(entries, id)
+		if !ok {
+			t.Errorf("expected to find entry id=%s", id)
+			continue
+		}
+		if entry.Runtime != "dotnet" {
+			t.Errorf("%s: expected runtime=dotnet, got %s", id, entry.Runtime)
+		}
+		if entry.DefaultPort != 5000 {
+			t.Errorf("%s: expected port=5000, got %d", id, entry.DefaultPort)
+		}
+		if entry.CorsPatch == nil {
+			t.Errorf("%s: expected cors_patch to be set", id)
+		}
+		if entry.Docker == nil {
+			t.Errorf("%s: expected docker config to be set", id)
+		}
+		if entry.RequiresRuntime != "dotnet" {
+			t.Errorf("%s: expected requires_runtime=dotnet, got %s", id, entry.RequiresRuntime)
+		}
+	}
+}
+
 func TestReadEmbeddedHelpers_NormalizeSourcePaths(t *testing.T) {
 	fileBytes, err := registry.ReadEmbeddedFile("internal/registry/data/frontends/react.yaml")
 	if err != nil {

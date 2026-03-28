@@ -1,0 +1,33 @@
+id: dotnet-webapi
+name: ASP.NET Core (Web API)
+type: backend
+runtime: dotnet
+group: .NET
+requires_runtime: dotnet
+scaffold_cmd: "dotnet new webapi -n {{.ProjectName}}-backend --output {{.ScaffoldName}}"
+default_port: 5000
+env_vars:
+  - PORT
+  - DB_HOST
+  - DB_PORT
+  - DB_USER
+  - DB_PASSWORD
+  - DB_NAME
+cors_patch:
+  file: Program.cs
+  marker: "// valla:cors"
+  template: |
+    builder.Services.AddCors(options =>
+    {
+        options.AddPolicy("VallaPolicy", policy =>
+            policy.WithOrigins("http://localhost:{{.FrontendPort}}")
+                  .AllowAnyMethod()
+                  .AllowAnyHeader());
+    });
+post_scaffold_files:
+  - path: Program.cs
+    template: internal/registry/data/post-scaffold/dotnet-webapi-program.cs.tmpl
+docker:
+  image: mcr.microsoft.com/dotnet/aspnet:8.0
+  build_context: ./backend
+  dockerfile: internal/registry/data/dockerfiles/dotnet.Dockerfile
