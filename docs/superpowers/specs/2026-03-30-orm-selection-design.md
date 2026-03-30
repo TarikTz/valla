@@ -14,8 +14,8 @@ Add an optional ORM selection step (Prisma or Drizzle) after database selection.
 The ORM step is shown when **all three** conditions are true:
 
 1. **At least one SQL database selected** — `postgres`, `mysql`, `mariadb`, or `sqlite`. Redis-only and MongoDB-only projects are not eligible.
-2. **Node/TS runtime present** — either a Node-based backend (`runtime == "node"`), or frontend-only mode (`OutputMode == "frontend-only"`).
-3. **Server-side capable framework** — for full-stack, any Node backend qualifies. For frontend-only, only frameworks with `ServerSide: true` qualify (Next.js, Astro, SvelteKit, TanStack Start). Plain SPAs (React, Vue, Angular) do not qualify.
+2. **Node/TS runtime present** — either a Node-based backend (`runtime == "node"`), including `backend-only` mode, or a server-side frontend-only project (`OutputMode == "frontend-only"` with a server-side capable framework).
+3. **Server-side capable framework** — for full-stack or backend-only, any Node backend qualifies. For frontend-only, only frameworks with `ServerSide: true` qualify (Next.js, Astro, SvelteKit, TanStack Start). Plain SPAs (React, Vue, Angular) do not qualify.
 
 A helper function `isORMEligible(m Model) bool` in `model.go` encodes all three rules.
 
@@ -46,7 +46,7 @@ All other frontend YAML files leave `server_side` unset (defaults to `false`).
 Add one field to `WeldContext` in `internal/registry/types.go`:
 
 ```go
-ORMID string // "prisma", "drizzle", or "" for none
+ORMID string // "prisma", "drizzle", or "" for none — no yaml tag needed; WeldContext is not deserialized from YAML
 ```
 
 ---
@@ -115,7 +115,7 @@ func ormOptions() []steps.RuntimeOption {
 }
 ```
 
-Reuses the existing `RuntimeSelect` component (single-select, Enter to confirm).
+Reuses the existing `RuntimeSelect` component (single-select, Enter to confirm). `"None"` is first and is therefore the default cursor position — pressing Enter without navigating selects None (`ORMID = ""`). This is intentional: ORM is opt-in.
 
 ### `isORMEligible` helper
 
@@ -179,12 +179,14 @@ For both Prisma and Drizzle, the "primary SQL database" is the first entry in `c
 
 ### Prisma
 
+**Target: Prisma 7+** (uses `provider = "prisma-client"`; Prisma 6 users should upgrade).
+
 File: `{serviceDir}/prisma/schema.prisma`
 
 ```prisma
 generator client {
   provider = "prisma-client"
-  output   = "../generated/prisma"
+  output   = "../src/generated/prisma"
 }
 
 datasource db {
@@ -192,6 +194,8 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 ```
+
+The `output` path `"../src/generated/prisma"` is relative to the `prisma/` subdirectory, resolving to `{serviceDir}/src/generated/prisma` — consistent with the official Prisma 7 examples.
 
 Template data struct:
 ```go
@@ -219,7 +223,9 @@ export default defineConfig({
 });
 ```
 
-**`{serviceDir}/src/db/index.ts`**:
+**`{serviceDir}/src/db/index.ts`** — two variants depending on the DB:
+
+For postgres and mysql/mariadb (URL string form):
 ```typescript
 import 'dotenv/config';
 import { drizzle } from 'drizzle-orm/{{.DrizzleImport}}';
@@ -229,19 +235,32 @@ const db = drizzle(process.env.DATABASE_URL!);
 export { db };
 ```
 
+For sqlite (`better-sqlite3` requires a `Database` instance, not a URL string):
+```typescript
+import 'dotenv/config';
+import { drizzle } from 'drizzle-orm/better-sqlite3';
+import Database from 'better-sqlite3';
+
+const db = drizzle(new Database(process.env.DATABASE_URL!));
+
+export { db };
+```
+
+The `GenerateDrizzleConfig` function returns the appropriate `index.ts` content based on the dialect — it is not a single shared template.
+
 Template data struct:
 ```go
 type drizzleTemplateData struct {
     DrizzleDialect string // "postgresql", "mysql", "sqlite"
-    DrizzleImport  string // "node-postgres", "mysql2", "better-sqlite3"
+    DrizzleImport  string // "node-postgres", "mysql2" (sqlite uses hardcoded template)
 }
 ```
 
-| DB | `DrizzleDialect` | `DrizzleImport` |
-|---|---|---|
-| postgres | `postgresql` | `node-postgres` |
-| mysql / mariadb | `mysql` | `mysql2` |
-| sqlite | `sqlite` | `better-sqlite3` |
+| DB | `DrizzleDialect` | `DrizzleImport` | `index.ts` variant |
+|---|---|---|---|
+| postgres | `postgresql` | `node-postgres` | URL string |
+| mysql / mariadb | `mysql` | `mysql2` | URL string |
+| sqlite | `sqlite` | `better-sqlite3` | `new Database(...)` |
 
 Templates are embedded Go template strings (inline in `wiring/orm.go`, not separate files — they are short enough).
 
@@ -284,6 +303,14 @@ ORM: Drizzle
 Install commands are derived from the primary SQL DB using the driver mapping table in Section 5.
 
 A helper `ormInstallInstructions(ormID, primaryDBID string) string` in `main.go` returns the formatted block.
+
+`dotenv` is always included in Drizzle runtime dependencies regardless of DB, because `drizzle.config.ts` always uses `import 'dotenv/config'`. The install commands per DB are:
+
+| DB | Drizzle runtime deps | Drizzle dev deps |
+|---|---|---|
+| postgres | `drizzle-orm pg dotenv` | `drizzle-kit tsx @types/pg` |
+| mysql / mariadb | `drizzle-orm mysql2 dotenv` | `drizzle-kit tsx` |
+| sqlite | `drizzle-orm better-sqlite3 dotenv` | `drizzle-kit tsx @types/better-sqlite3` |
 
 ---
 
