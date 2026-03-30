@@ -1,0 +1,12 @@
+id: mysql
+name: MySQL
+type: database
+default_port: 3306
+docker:
+  image: mysql:8
+  volume_path: /var/lib/mysql
+  env_vars:
+    MYSQL_ROOT_PASSWORD: "{{.Password}}"
+    MYSQL_USER: "{{.User}}"
+    MYSQL_PASSWORD: "{{.Password}}"
+    MYSQL_DATABASE: "{{.Name}}"

@@ -9,22 +9,31 @@ import (
 	"github.com/tariktz/valla-cli/internal/registry"
 )
 
+// DBServiceInput bundles everything needed to render one database service
+// in docker-compose.yml.
+type DBServiceInput struct {
+	ID     string                 // registry ID: "postgres", "redis", etc.
+	Docker *registry.DockerConfig // nil for SQLite (no Docker service)
+	Config registry.DBConfig      // resolved credentials / port / path
+}
+
 // DockerOptions groups all inputs needed to generate docker-compose.yml.
 type DockerOptions struct {
 	Ctx      registry.WeldContext
 	Frontend *registry.DockerConfig // nil when no frontend selected
 	Backend  *registry.DockerConfig // nil when no backend selected
-	DB       *registry.DockerConfig
-	IsSQLite bool
+	DBs      []DBServiceInput       // one entry per selected database; empty = none
 }
 
 const composeTmpl = `version: "3.8"
 networks:
   weld-net:
     driver: bridge
-{{- if and .DB (not .IsSQLite)}}
+{{- if .Volumes}}
 volumes:
-  db-data:
+{{- range .Volumes}}
+  {{.}}:
+{{- end}}
 {{- end}}
 
 services:
@@ -35,16 +44,13 @@ services:
       dockerfile: {{.Frontend.Dockerfile}}
     ports:
       - "{{.Ctx.FrontendPort}}:{{.Ctx.FrontendPort}}"
-{{- if .FrontendEnv }}
+{{- if .FrontendEnv}}
     environment:
-{{- range .FrontendEnv }}
-      - {{ . }}
-{{- end }}
-{{- end }}
-    networks: [weld-net]
-{{- if .Backend}}
-    depends_on: [backend]
+{{- range .FrontendEnv}}
+      - {{.}}
 {{- end}}
+{{- end}}
+    networks: [weld-net]
 {{- end}}
 {{- if .Backend}}
 
@@ -54,35 +60,48 @@ services:
       dockerfile: {{.Backend.Dockerfile}}
     ports:
       - "{{.Ctx.BackendPort}}:{{.Ctx.BackendPort}}"
-{{- if .BackendEnv }}
+{{- if .BackendEnv}}
     environment:
-{{- range .BackendEnv }}
-      - {{ . }}
-{{- end }}
-{{- end }}
+{{- range .BackendEnv}}
+      - {{.}}
+{{- end}}
+{{- end}}
     env_file: .env
     networks: [weld-net]
-{{- if and .DB (not .IsSQLite)}}
-    depends_on: [db]
+{{- if .DBServiceIDs}}
+    depends_on:
+{{- range .DBServiceIDs}}
+      - {{.}}
 {{- end}}
 {{- end}}
-{{- if and .DB (not .IsSQLite)}}
+{{- end}}
+{{- range .DBServices}}
 
-  db:
-    image: {{.DB.Image}}
+  {{.ID}}:
+    image: {{.Docker.Image}}
     ports:
-      - "{{.Ctx.DBPort}}:{{.Ctx.DBPort}}"
-{{- if .DBEnv }}
+      - "{{.Config.Port}}:{{.Config.Port}}"
+{{- if .Env}}
     environment:
-{{- range .DBEnv }}
-      {{ . }}
-{{- end }}
-{{- end }}
+{{- range .Env}}
+      {{.}}
+{{- end}}
+{{- end}}
+{{- if .Docker.VolumePath}}
     volumes:
-      - db-data:/var/lib/postgresql/data
+      - {{.ID}}-data:{{.Docker.VolumePath}}
+{{- end}}
     networks: [weld-net]
 {{- end}}
 `
+
+// composeDBService is the template-ready representation of one DB service.
+type composeDBService struct {
+	ID     string
+	Docker *registry.DockerConfig
+	Config registry.DBConfig
+	Env    []string
+}
 
 type composeData struct {
 	DockerOptions
@@ -90,7 +109,9 @@ type composeData struct {
 	BackendContext  string
 	FrontendEnv     []string
 	BackendEnv      []string
-	DBEnv           []string
+	DBServices      []composeDBService
+	DBServiceIDs    []string
+	Volumes         []string
 }
 
 // GenerateDockerCompose produces the content of docker-compose.yml.
@@ -124,17 +145,32 @@ func GenerateDockerCompose(opts DockerOptions) (string, error) {
 			return "", err
 		}
 	}
-	var dbEnv []string
-	if opts.DB != nil {
-		dbEnv, err = renderDockerEnv(opts.DB.EnvVars, opts.Ctx, true)
+
+	var dbServices []composeDBService
+	var dbServiceIDs []string
+	var volumes []string
+	for _, db := range opts.DBs {
+		if db.Docker == nil {
+			// SQLite or other file-based DB: no Docker service
+			continue
+		}
+		dbEnv, err := renderDockerEnv(db.Docker.EnvVars, db.Config, true)
 		if err != nil {
 			return "", err
 		}
+		dbServices = append(dbServices, composeDBService{
+			ID:     db.ID,
+			Docker: db.Docker,
+			Config: db.Config,
+			Env:    dbEnv,
+		})
+		dbServiceIDs = append(dbServiceIDs, db.ID)
+		if db.Docker.VolumePath != "" {
+			volumes = append(volumes, db.ID+"-data")
+		}
 	}
 
-	tmpl, err := template.New("compose").Funcs(template.FuncMap{
-		"not": func(value bool) bool { return !value },
-	}).Parse(composeTmpl)
+	tmpl, err := template.New("compose").Parse(composeTmpl)
 	if err != nil {
 		return "", err
 	}
@@ -146,7 +182,9 @@ func GenerateDockerCompose(opts DockerOptions) (string, error) {
 		BackendContext:  backendContext,
 		FrontendEnv:     frontendEnv,
 		BackendEnv:      backendEnv,
-		DBEnv:           dbEnv,
+		DBServices:      dbServices,
+		DBServiceIDs:    dbServiceIDs,
+		Volumes:         volumes,
 	}); err != nil {
 		return "", err
 	}
@@ -154,7 +192,10 @@ func GenerateDockerCompose(opts DockerOptions) (string, error) {
 	return buffer.String(), nil
 }
 
-func renderDockerEnv(envVars map[string]string, ctx registry.WeldContext, useComposeSyntax bool) ([]string, error) {
+// renderDockerEnv renders templated env var values for a Docker service.
+// data is passed directly as the template context: pass registry.WeldContext
+// for frontend/backend services, and registry.DBConfig for DB services.
+func renderDockerEnv(envVars map[string]string, data any, useComposeSyntax bool) ([]string, error) {
 	if len(envVars) == 0 {
 		return nil, nil
 	}
@@ -172,7 +213,7 @@ func renderDockerEnv(envVars map[string]string, ctx registry.WeldContext, useCom
 			return nil, err
 		}
 		var buffer bytes.Buffer
-		if err := tmpl.Execute(&buffer, ctx); err != nil {
+		if err := tmpl.Execute(&buffer, data); err != nil {
 			return nil, err
 		}
 		if useComposeSyntax {

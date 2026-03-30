@@ -1,0 +1,12 @@
+id: mariadb
+name: MariaDB
+type: database
+default_port: 3306
+docker:
+  image: mariadb:11
+  volume_path: /var/lib/mysql
+  env_vars:
+    MARIADB_ROOT_PASSWORD: "{{.Password}}"
+    MARIADB_USER: "{{.User}}"
+    MARIADB_PASSWORD: "{{.Password}}"
+    MARIADB_DATABASE: "{{.Name}}"
