@@ -161,10 +161,35 @@ func isORMEligible(m Model) bool {
 
 Files are written in `main.go` after the `.env` write, only when `ctx.ORMID != ""`.
 
-### Target directory
+### Target directory (`serviceDir`)
 
-- **Frontend-only**: inside `frontendDir` (e.g. `./frontend` or `./myapp-frontend`)
-- **Full-stack**: inside `backendDir`
+The ORM files are written into the Node service directory. `serviceDir` resolves as follows:
+
+| Output mode | `serviceDir` |
+|---|---|
+| `monorepo` | `{projectRoot}/backend` |
+| `separate` | `{projectName}-backend` (sibling of cwd, no shared root) |
+| `frontend-only` (monorepo) | `{projectRoot}/frontend` |
+| `frontend-only` (separate) | `{projectName}-frontend` |
+| `backend-only` | `{projectRoot}/backend` |
+
+This mirrors how `main.go` already resolves `frontendDir` and `backendDir` per output mode.
+
+### `DATABASE_URL` in `.env`
+
+Prisma and Drizzle both expect a single `DATABASE_URL` connection string. The multi-DB `.env` format uses prefixed individual vars (`POSTGRES_HOST`, `POSTGRES_PORT`, etc.) and does not emit `DATABASE_URL`.
+
+When `ctx.ORMID != ""`, `GenerateEnv` emits one additional line — a composed `DATABASE_URL` for the primary SQL database — appended after the prefixed vars:
+
+| DB | `DATABASE_URL` format |
+|---|---|
+| `postgres` | `postgresql://{{POSTGRES_USER}}:{{POSTGRES_PASSWORD}}@{{POSTGRES_HOST}}:{{POSTGRES_PORT}}/{{POSTGRES_DB}}` |
+| `mysql` / `mariadb` | `mysql://{{MYSQL_USER}}:{{MYSQL_PASSWORD}}@{{MYSQL_HOST}}:{{MYSQL_PORT}}/{{MYSQL_DATABASE}}` (or `MARIADB_*` prefix) |
+| `sqlite` | `{{DB_PATH}}` (Drizzle sqlite uses the path directly; Prisma uses the file path) |
+
+The values come from `ctx.DBConfigs[primaryDBID]` — the same data already used to generate the prefixed vars. The `GenerateEnv` signature does not change; it already receives the full `WeldContext` including `ORMID`.
+
+**Only one `DATABASE_URL` is emitted** — for the first SQL DB in `DatabaseIDs`. If multiple SQL DBs are selected (e.g. postgres + mysql), only the first gets `DATABASE_URL` since ORMs connect to a single database.
 
 ### SQL database provider mapping
 
@@ -340,7 +365,13 @@ Test cases:
 
 ---
 
-## 10. Out of Scope
+## 10. WordPress Mode
+
+WordPress projects bypass `phaseDatabaseSelect` entirely (the WordPress handler in `phaseOutputStructure` sets `DatabaseIDs`/`DBConfigs` directly and jumps to `phasePortOverrides`). Therefore `phaseORMSelect` is never reached for WordPress projects. No guard is needed in `isORMEligible` — the phase is structurally unreachable.
+
+---
+
+## 11. Out of Scope
 
 - MongoDB ORM support (Prisma supports it but requires a completely different schema approach)
 - Per-ORM schema model generation (just the config file, not example models)
