@@ -31,6 +31,8 @@ On first run, the correct pre-built binary for your platform is downloaded and c
 - Injects backend CORS configuration for supported backends
 - Supports monorepo and separate-folder output modes
 - Includes a dedicated WordPress mode with Docker services and a starter theme
+- Supports multiple databases simultaneously (e.g. PostgreSQL + Redis)
+- Optionally generates ORM configuration files (Prisma or Drizzle) for eligible stacks
 
 ## How It Works
 
@@ -40,20 +42,23 @@ The CLI walks through a short set of prompts:
 2. Output structure (monorepo, separate folders, or WordPress)
 3. Frontend runtime and framework
 4. Backend runtime and framework
-5. Database
-6. Local `.env` or Docker Compose
-7. Optional port overrides
-8. Confirmation and scaffolding
+5. Database (multi-select — combine PostgreSQL, MySQL, MariaDB, MongoDB, Redis, or pick SQLite/None)
+6. ORM selection (Prisma, Drizzle, or None — shown only for eligible stacks)
+7. Local `.env` or Docker Compose
+8. Optional port overrides
+9. Confirmation and scaffolding
 
 For WordPress, the CLI downloads the latest WordPress source, prepares Docker services, and creates a starter theme.
 
 ## Supported Stacks
 
-**Frontend:** React, Vue, Angular, Svelte, Astro
+**Frontend:** React, Vue, Angular, Svelte (SvelteKit), Astro, Next.js, TanStack Start — each available with Node or Bun runtime
 
-**Backend:** Go (Gin), Go (Fiber), Go boilerplate, Node.js (Express), Node.js (Nest), Node.js boilerplate
+**Backend:** Go (Gin, Fiber, Boilerplate), Node.js (Express, NestJS, Boilerplate), Python (FastAPI, Flask, Django), .NET (ASP.NET Core Web API, Minimal API), Java (Spring Boot Maven/Gradle, Quarkus Maven/Gradle)
 
-**Database:** PostgreSQL, SQLite
+**Database:** PostgreSQL, MySQL, MariaDB, MongoDB, Redis, SQLite — multiple databases can be selected simultaneously
+
+**ORM _(optional)_:** Prisma or Drizzle — available when a SQL database is selected with a Node.js runtime or server-side frontend framework
 
 **Output modes:** Monorepo, Separate folders, WordPress
 
@@ -68,13 +73,24 @@ my-app/
 └── docker-compose.yml
 ```
 
-**Separate folders:**
+**Monorepo with Prisma:**
 ```
 my-app/
-├── my-app-frontend/
-├── my-app-backend/
-├── .env
+├── frontend/
+├── backend/
+│   ├── prisma/
+│   │   └── schema.prisma
+│   └── prisma.config.ts
+├── .env               ← includes DATABASE_URL
 └── docker-compose.yml
+```
+
+**Separate folders:**
+```
+my-app-frontend/
+my-app-backend/
+.env
+docker-compose.yml
 ```
 
 **WordPress:**
