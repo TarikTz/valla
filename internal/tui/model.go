@@ -21,6 +21,7 @@ const (
 	phaseBackendRuntime
 	phaseBackendFramework
 	phaseDatabaseSelect
+	phaseORMSelect
 	phaseEnvMode
 	phasePortOverrides
 	phaseConfirm
@@ -99,11 +100,17 @@ func (m Model) handleStepDone(msg steps.StepDone) (tea.Model, tea.Cmd) {
 			m.ctx.EnvMode = "docker"
 			m.ctx.FrontendPort = 8080
 			m.ctx.BackendPort = 0
-			m.ctx.DBPort = 3306
-			m.ctx.DBHost = "db"
-			m.ctx.DBUser = "wordpress"
-			m.ctx.DBPassword = "wordpress"
-			m.ctx.DBName = wordpressDBName(m.ctx.ProjectName)
+			wpDBName := wordpressDBName(m.ctx.ProjectName)
+			m.ctx.DatabaseIDs = []string{"mysql"}
+			m.ctx.DBConfigs = map[string]registry.DBConfig{
+				"mysql": {
+					Host:     "db",
+					Port:     3306,
+					User:     "wordpress",
+					Password: "wordpress",
+					Name:     wpDBName,
+				},
+			}
 			m.phase = phasePortOverrides
 			m.current = m.buildPortOverrides()
 			return m, m.current.Init()
@@ -154,7 +161,7 @@ func (m Model) handleStepDone(msg steps.StepDone) (tea.Model, tea.Cmd) {
 		m.ctx.FrontendPort = entry.DefaultPort
 		if m.ctx.OutputMode == "frontend-only" {
 			m.phase = phaseDatabaseSelect
-			m.current = steps.NewDatabaseSelect(m.databaseDisplayNames())
+			m.current = m.buildDatabaseMultiSelect()
 		} else {
 			m.phase = phaseBackendRuntime
 			m.current = steps.NewRuntimeSelect("Select backend runtime:", m.beRuntimeOpts)
@@ -170,37 +177,62 @@ func (m Model) handleStepDone(msg steps.StepDone) (tea.Model, tea.Cmd) {
 		entry, _ := registry.FindByID(m.entries, id)
 		m.ctx.BackendPort = entry.DefaultPort
 		m.phase = phaseDatabaseSelect
-		m.current = steps.NewDatabaseSelect(m.databaseDisplayNames())
+		m.current = m.buildDatabaseMultiSelect()
 	case phaseDatabaseSelect:
-		id := m.databaseIDFromName(msg.Value.(string))
-		m.ctx.DatabaseID = id
-		if id != "" {
+		ids := msg.Value.([]string)
+		m.ctx.DatabaseIDs = ids
+		m.ctx.DBConfigs = map[string]registry.DBConfig{}
+		for _, id := range ids {
 			entry, _ := registry.FindByID(m.entries, id)
-			if entry.SQLite {
-				m.ctx.DBPath = entry.DBPathDefault
-			} else {
-				m.ctx.DBPort = entry.DefaultPort
-				m.ctx.DBUser = "postgres"
-				m.ctx.DBPassword = "postgres"
+			var cfg registry.DBConfig
+			switch id {
+			case "postgres":
+				cfg = registry.DBConfig{Port: entry.DefaultPort, User: "postgres", Password: "postgres", Name: m.ctx.DBName}
+			case "mysql", "mariadb":
+				cfg = registry.DBConfig{Port: entry.DefaultPort, User: "root", Password: "root", Name: m.ctx.DBName}
+			case "mongodb":
+				cfg = registry.DBConfig{Port: entry.DefaultPort, User: "root", Password: "root"}
+			case "redis":
+				cfg = registry.DBConfig{Port: entry.DefaultPort}
+			default:
+				if entry.SQLite {
+					cfg = registry.DBConfig{Path: entry.DBPathDefault, SQLite: true}
+				} else {
+					cfg = registry.DBConfig{Port: entry.DefaultPort}
+				}
 			}
+			m.ctx.DBConfigs[id] = cfg
 		}
+		if isORMEligible(m) {
+			m.phase = phaseORMSelect
+			m.current = steps.NewRuntimeSelect("Select ORM (optional):", ormOptions())
+		} else {
+			m.phase = phaseEnvMode
+			m.current = steps.NewEnvMode()
+		}
+	case phaseORMSelect:
+		m.ctx.ORMID = ormIDFromName(msg.Value.(string))
 		m.phase = phaseEnvMode
 		m.current = steps.NewEnvMode()
 	case phaseEnvMode:
 		choice := msg.Value.(string)
+		var host string
 		if choice == "Local (.env)" {
 			m.ctx.EnvMode = "local"
-			m.ctx.DBHost = "localhost"
+			host = "localhost"
 		} else {
 			m.ctx.EnvMode = "docker"
-			m.ctx.DBHost = "db"
+			host = "db"
+		}
+		for id, cfg := range m.ctx.DBConfigs {
+			cfg.Host = host
+			m.ctx.DBConfigs[id] = cfg
 		}
 		m.phase = phasePortOverrides
 		m.current = m.buildPortOverrides()
 	case phasePortOverrides:
 		result := msg.Value.(steps.PortOverrideResult)
-		dbEntry, _ := registry.FindByID(m.entries, m.ctx.DatabaseID)
-		m.applyPortOverrides(result, dbEntry.SQLite)
+		m.applyPortOverrides(result)
 		m.phase = phaseConfirm
 		m.current = steps.NewConfirmSummary(m.summaryLines())
 	case phaseConfirm:
@@ -243,36 +275,28 @@ func (m Model) frameworkIDFromName(entryType, runtime, name string) string {
 	return ""
 }
 
-// databaseDisplayNames returns display names for database selection, with None first.
-func (m Model) databaseDisplayNames() []string {
-	names := []string{"None"}
+// buildDatabaseMultiSelect builds the multi-select TUI step from database registry entries.
+func (m Model) buildDatabaseMultiSelect() steps.DatabaseMultiSelect {
+	var opts []steps.DatabaseMultiOption
 	for _, entry := range m.entries {
-		if entry.Type == "database" {
-			names = append(names, entry.Name)
+		if entry.Type != "database" {
+			continue
 		}
+		opts = append(opts, steps.DatabaseMultiOption{
+			ID:        entry.ID,
+			Name:      entry.Name,
+			Exclusive: entry.SQLite, // SQLite is exclusive
+		})
 	}
-	return names
-}
-
-// databaseIDFromName resolves a database display name to a registry entry ID.
-// Returns "" for "None".
-func (m Model) databaseIDFromName(name string) string {
-	if name == "None" {
-		return ""
-	}
-	for _, entry := range m.entries {
-		if entry.Type == "database" && entry.Name == name {
-			return entry.ID
-		}
-	}
-	return ""
+	return steps.NewDatabaseMultiSelect(opts)
 }
 
 func (m Model) buildPortOverrides() steps.PortOverrides {
 	if m.ctx.OutputMode == "wordpress" {
+		mysqlCfg := m.ctx.DBConfigs["mysql"]
 		return steps.NewPortOverrides([]steps.PortField{
 			makePortField("WordPress Port", m.ctx.FrontendPort, false),
-			makePortField("MySQL Port", m.ctx.DBPort, false),
+			makePortField("MySQL Port", mysqlCfg.Port, false),
 		})
 	}
 	var fields []steps.PortField
@@ -282,14 +306,15 @@ func (m Model) buildPortOverrides() steps.PortOverrides {
 	if m.ctx.BackendID != "" {
 		fields = append(fields, makePortField("Backend Port", m.ctx.BackendPort, false))
 	}
-	if m.ctx.DatabaseID != "" {
-		dbEntry, _ := registry.FindByID(m.entries, m.ctx.DatabaseID)
-		if dbEntry.SQLite {
+	for _, id := range m.ctx.DatabaseIDs {
+		entry, _ := registry.FindByID(m.entries, id)
+		cfg := m.ctx.DBConfigs[id]
+		if entry.SQLite {
 			input := textinput.New()
-			input.SetValue(m.ctx.DBPath)
+			input.SetValue(cfg.Path)
 			fields = append(fields, steps.PortField{Label: "DB File Path", IsPath: true, Input: input})
 		} else {
-			fields = append(fields, makePortField("DB Port", m.ctx.DBPort, false))
+			fields = append(fields, makePortField(entry.Name+" Port", cfg.Port, false))
 		}
 	}
 	return steps.NewPortOverrides(fields)
@@ -301,7 +326,7 @@ func makePortField(label string, port int, isPath bool) steps.PortField {
 	return steps.PortField{Label: label, IsPath: isPath, Input: input}
 }
 
-func (m *Model) applyPortOverrides(result steps.PortOverrideResult, isSQLite bool) {
+func (m *Model) applyPortOverrides(result steps.PortOverrideResult) {
 	parseInt := func(value string, fallback int) int {
 		if parsed, err := strconv.Atoi(value); err == nil {
 			return parsed
@@ -313,7 +338,11 @@ func (m *Model) applyPortOverrides(result steps.PortOverrideResult, isSQLite boo
 			m.ctx.FrontendPort = parseInt(result.Values[0], m.ctx.FrontendPort)
 		}
 		if len(result.Values) >= 2 {
-			m.ctx.DBPort = parseInt(result.Values[1], m.ctx.DBPort)
+			cfg := m.ctx.DBConfigs["mysql"]
+			if parsed, err := strconv.Atoi(result.Values[1]); err == nil {
+				cfg.Port = parsed
+			}
+			m.ctx.DBConfigs["mysql"] = cfg
 		}
 		return
 	}
@@ -326,24 +355,34 @@ func (m *Model) applyPortOverrides(result steps.PortOverrideResult, isSQLite boo
 		m.ctx.BackendPort = parseInt(result.Values[idx], m.ctx.BackendPort)
 		idx++
 	}
-	if m.ctx.DatabaseID != "" && idx < len(result.Values) {
-		if isSQLite {
-			m.ctx.DBPath = result.Values[idx]
-		} else {
-			m.ctx.DBPort = parseInt(result.Values[idx], m.ctx.DBPort)
+	for _, id := range m.ctx.DatabaseIDs {
+		if idx >= len(result.Values) {
+			break
 		}
+		entry, _ := registry.FindByID(m.entries, id)
+		cfg := m.ctx.DBConfigs[id]
+		if entry.SQLite {
+			cfg.Path = result.Values[idx]
+		} else {
+			if parsed, err := strconv.Atoi(result.Values[idx]); err == nil {
+				cfg.Port = parsed
+			}
+		}
+		m.ctx.DBConfigs[id] = cfg
+		idx++
 	}
 }
 
 func (m Model) summaryLines() []string {
 	if m.ctx.OutputMode == "wordpress" {
+		mysqlCfg := m.ctx.DBConfigs["mysql"]
 		return []string{
 			fmt.Sprintf("Project:        %s", m.ctx.ProjectName),
 			fmt.Sprintf("Structure:      %s", m.ctx.OutputMode),
 			fmt.Sprintf("Env mode:       %s", m.ctx.EnvMode),
 			fmt.Sprintf("WordPress port: %d", m.ctx.FrontendPort),
-			fmt.Sprintf("MySQL port:     %d", m.ctx.DBPort),
-			fmt.Sprintf("DB name:        %s", m.ctx.DBName),
+			fmt.Sprintf("MySQL port:     %d", mysqlCfg.Port),
+			fmt.Sprintf("DB name:        %s", mysqlCfg.Name),
 		}
 	}
 	lines := []string{
@@ -357,16 +396,32 @@ func (m Model) summaryLines() []string {
 	if m.ctx.BackendID != "" {
 		lines = append(lines, fmt.Sprintf("BE port:    %d", m.ctx.BackendPort))
 	}
-	if m.ctx.DatabaseID != "" {
-		dbEntry, _ := registry.FindByID(m.entries, m.ctx.DatabaseID)
-		if dbEntry.SQLite {
-			lines = append(lines, fmt.Sprintf("DB path:    %s", m.ctx.DBPath))
+	if len(m.ctx.DatabaseIDs) > 0 {
+		names := make([]string, 0, len(m.ctx.DatabaseIDs))
+		for _, id := range m.ctx.DatabaseIDs {
+			entry, _ := registry.FindByID(m.entries, id)
+			names = append(names, entry.Name)
+		}
+		if len(m.ctx.DatabaseIDs) == 1 {
+			entry, _ := registry.FindByID(m.entries, m.ctx.DatabaseIDs[0])
+			if entry.SQLite {
+				lines = append(lines, fmt.Sprintf("DB path:    %s", m.ctx.DBConfigs[m.ctx.DatabaseIDs[0]].Path))
+			} else {
+				lines = append(lines, fmt.Sprintf("DB port:    %d", m.ctx.DBConfigs[m.ctx.DatabaseIDs[0]].Port))
+			}
 		} else {
-			lines = append(lines, fmt.Sprintf("DB port:    %d", m.ctx.DBPort))
+			lines = append(lines, fmt.Sprintf("Databases:  %s", strings.Join(names, ", ")))
 		}
 	} else {
 		lines = append(lines, "Database:   none")
 	}
+	ormLabel := "none"
+	if m.ctx.ORMID == "prisma" {
+		ormLabel = "Prisma"
+	} else if m.ctx.ORMID == "drizzle" {
+		ormLabel = "Drizzle"
+	}
+	lines = append(lines, fmt.Sprintf("ORM:        %s", ormLabel))
 	return lines
 }
 
@@ -398,4 +453,60 @@ func wordpressDBName(projectName string) string {
 		return "wordpress"
 	}
 	return name
+}
+
+// isORMEligible reports whether the ORM selection step should be shown.
+// Rules: at least one SQL DB selected, AND a Node runtime is present
+// (Node backend for full-stack/backend-only; server-side frontend for frontend-only).
+func isORMEligible(m Model) bool {
+	sqlDBs := map[string]bool{"postgres": true, "mysql": true, "mariadb": true, "sqlite": true}
+	hasSQL := false
+	for _, id := range m.ctx.DatabaseIDs {
+		if sqlDBs[id] {
+			hasSQL = true
+			break
+		}
+	}
+	if !hasSQL {
+		return false
+	}
+	if m.ctx.BackendID != "" {
+		for _, e := range m.entries {
+			if e.ID == m.ctx.BackendID && e.Runtime == "node" {
+				return true
+			}
+		}
+		return false
+	}
+	// frontend-only: requires a server-side capable framework
+	if m.ctx.FrontendID != "" {
+		for _, e := range m.entries {
+			if e.ID == m.ctx.FrontendID && e.ServerSide {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// ormOptions returns the options for the ORM selection step.
+// "None" is first and is the default cursor position (ORM is opt-in).
+func ormOptions() []steps.RuntimeOption {
+	return []steps.RuntimeOption{
+		{Name: "None", Available: true},
+		{Name: "Prisma", Available: true},
+		{Name: "Drizzle", Available: true},
+	}
+}
+
+// ormIDFromName maps the display name to a registry-style ID.
+func ormIDFromName(name string) string {
+	switch name {
+	case "Prisma":
+		return "prisma"
+	case "Drizzle":
+		return "drizzle"
+	default:
+		return ""
+	}
 }

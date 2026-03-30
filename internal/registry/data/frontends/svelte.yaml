@@ -6,6 +6,7 @@ group: Svelte
 requires_runtime: node
 scaffold_cmd: "npm create vite@latest {{.ScaffoldName}} -- --template svelte"
 default_port: 5173
+server_side: true
 http_client_patch:
   file: src/lib/api.ts
   mode: create

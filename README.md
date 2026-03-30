@@ -51,30 +51,66 @@ go build -o valla-cli ./cmd/valla
 - Injects backend CORS configuration for supported backends
 - Supports monorepo and separate-folder output modes
 - Includes a dedicated WordPress mode with Docker services and a starter theme
+- Supports multiple databases simultaneously (e.g. PostgreSQL + Redis)
+- Optionally generates ORM configuration files (Prisma or Drizzle) for eligible stacks
 
 ## Supported Stacks
 
 ### Frontend
 
-- React
-- Vue
-- Angular
-- Svelte
-- Astro
+| Framework | Node | Bun | Server-side |
+|-----------|:----:|:---:|:-----------:|
+| React | ✓ | ✓ | |
+| Vue | ✓ | ✓ | |
+| Angular | ✓ | ✓ | |
+| Svelte (SvelteKit) | ✓ | ✓ | ✓ |
+| Astro | ✓ | ✓ | ✓ |
+| Next.js | ✓ | ✓ | ✓ |
+| TanStack Start | ✓ | ✓ | ✓ |
+
+> Server-side frameworks are eligible for ORM integration in frontend-only mode.
 
 ### Backend
 
-- Go (Gin)
-- Go (Fiber)
-- Go boilerplate template
-- Node.js (Express)
-- Node.js (Nest)
-- Node.js boilerplate template
+| Language | Framework / Template |
+|----------|----------------------|
+| Go | Gin |
+| Go | Fiber |
+| Go | Boilerplate |
+| Node.js | Express |
+| Node.js | NestJS |
+| Node.js | Boilerplate |
+| Python | FastAPI |
+| Python | Flask |
+| Python | Django |
+| .NET | ASP.NET Core (Web API) |
+| .NET | Minimal API |
+| Java | Spring Boot (Maven) |
+| Java | Spring Boot (Gradle) |
+| Java | Quarkus (Maven) |
+| Java | Quarkus (Gradle) |
 
 ### Database
 
-- PostgreSQL
-- SQLite
+Multiple databases can be selected simultaneously. SQLite and None are exclusive options.
+
+| Database | Docker service | Combinable |
+|----------|:--------------:|:----------:|
+| PostgreSQL | ✓ | ✓ |
+| MySQL | ✓ | ✓ |
+| MariaDB | ✓ | ✓ |
+| MongoDB | ✓ | ✓ |
+| Redis | ✓ | ✓ |
+| SQLite | | exclusive |
+
+### ORM _(optional)_
+
+Shown when at least one SQL database is selected and the project uses a Node.js runtime (Node backend or a server-side frontend framework).
+
+| ORM | Generated files |
+|-----|------------------|
+| Prisma | `prisma/schema.prisma`, `prisma.config.ts` |
+| Drizzle | `drizzle.config.ts`, `src/db/index.ts` |
 
 ### Output Modes
 
@@ -98,12 +134,13 @@ The CLI walks through a short set of prompts:
 2. Output structure
 3. Frontend runtime and framework
 4. Backend runtime and framework
-5. Database
-6. Local `.env` or Docker Compose
-7. Optional port overrides
-8. Confirmation and scaffolding
+5. Database (multi-select — combine PostgreSQL, MySQL, MariaDB, MongoDB, Redis, or pick SQLite/None)
+6. ORM selection (Prisma, Drizzle, or None — shown only for eligible stacks)
+7. Local `.env` or Docker Compose
+8. Optional port overrides
+9. Confirmation and scaffolding
 
-For standard stacks, the result is a generated frontend and backend with environment wiring. For WordPress, the CLI downloads the latest WordPress source, prepares Docker services, and creates a starter theme inside `wordpress/wp-content/themes/<project-slug>`.
+For standard stacks, the result is a generated frontend and backend with environment wiring, a composed `.env`, and optionally ORM config files. For WordPress, the CLI downloads the latest WordPress source, prepares Docker services, and creates a starter theme inside `wordpress/wp-content/themes/<project-slug>`.
 
 ## Usage
 
@@ -154,14 +191,26 @@ my-app/
     docker-compose.yml
 ```
 
-### Separate folders
+With Prisma selected:
 
 ```text
 my-app/
-    my-app-frontend/
-    my-app-backend/
-    .env
+    frontend/
+    backend/
+        prisma/
+            schema.prisma
+        prisma.config.ts
+    .env               ← includes DATABASE_URL
     docker-compose.yml
+```
+
+### Separate folders
+
+```text
+my-app-frontend/
+my-app-backend/
+.env
+docker-compose.yml
 ```
 
 ### WordPress
@@ -189,8 +238,6 @@ Install only what your selected stack needs:
 
 ## Roadmap
 
-- .NET backends: ASP.NET Core Web API and .NET Minimal API
-- Java backends: Spring Boot (Maven/Gradle) and Quarkus (Maven/Gradle)
 - More backend and database combinations
 - Stronger end-to-end validation across stack combinations
 - Non-interactive flags for CI and scripted usage

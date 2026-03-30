@@ -6,6 +6,7 @@ group: Astro
 requires_runtime: bun
 scaffold_cmd: "bunx create-astro@latest {{.ScaffoldName}} -- --template basics --no-install --no-git --yes"
 default_port: 4321
+server_side: true
 http_client_patch:
   file: src/lib/api.ts
   mode: create

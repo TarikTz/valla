@@ -77,7 +77,8 @@ func main() {
 		}
 		fmt.Printf("\nWordPress project scaffolded successfully.\n\nNext steps:\n  cd %s\n  docker-compose up -d\n\n", ctx.ProjectName)
 		fmt.Printf("Open http://localhost:%d and finish the WordPress setup in the browser.\n", ctx.FrontendPort)
-		fmt.Printf("MySQL is preconfigured with DB=%s user=%s password=%s on host db:%d.\n", ctx.DBName, ctx.DBUser, ctx.DBPassword, ctx.DBPort)
+		mysqlCfg := ctx.DBConfigs["mysql"]
+		fmt.Printf("MySQL is preconfigured with DB=%s user=%s password=%s on host db:%d.\n", mysqlCfg.Name, mysqlCfg.User, mysqlCfg.Password, mysqlCfg.Port)
 		fmt.Printf("Develop themes locally in wordpress/wp-content/themes/%s.\n", wordpressThemeSlug(ctx.ProjectName))
 		return
 	}
@@ -132,11 +133,8 @@ func main() {
 		}
 	}
 
-	databaseEntry, _ := registry.FindByID(entries, ctx.DatabaseID)
-	isSQLite := databaseEntry.SQLite
-
 	fmt.Println("Writing .env...")
-	envContent := wiring.GenerateEnv(ctx, isSQLite)
+	envContent := wiring.GenerateEnv(ctx)
 	if err := os.WriteFile(filepath.Join(projectRoot, ".env"), []byte(envContent), 0o644); err != nil {
 		doRollback()
 		fmt.Fprintf(os.Stderr, "Failed to write .env: %v\n", err)
@@ -145,16 +143,23 @@ func main() {
 
 	if ctx.EnvMode == "docker" {
 		fmt.Println("Writing docker-compose.yml...")
-		var dbDocker *registry.DockerConfig
-		if databaseEntry.Docker != nil {
-			dbDocker = databaseEntry.Docker
+		var dbServices []wiring.DBServiceInput
+		for _, id := range ctx.DatabaseIDs {
+			entry, ok := registry.FindByID(entries, id)
+			if !ok {
+				continue
+			}
+			dbServices = append(dbServices, wiring.DBServiceInput{
+				ID:     id,
+				Docker: entry.Docker,
+				Config: ctx.DBConfigs[id],
+			})
 		}
 		composeContent, err := wiring.GenerateDockerCompose(wiring.DockerOptions{
 			Ctx:      ctx,
 			Frontend: frontendEntry.Docker,
 			Backend:  backendEntry.Docker,
-			DB:       dbDocker,
-			IsSQLite: isSQLite,
+			DBs:      dbServices,
 		})
 		if err != nil {
 			doRollback()
@@ -197,6 +202,52 @@ func main() {
 		clientFile := filepath.Join(projectRoot, frontendDir, frontendEntry.HTTPClientPatch.File)
 		if err := os.MkdirAll(filepath.Dir(clientFile), 0o755); err == nil {
 			_ = os.WriteFile(clientFile, []byte(clientContent), 0o644)
+		}
+	}
+
+	if ctx.ORMID != "" {
+		var serviceDir string
+		if ctx.BackendID != "" {
+			serviceDir = filepath.Join(projectRoot, backendDir)
+		} else {
+			serviceDir = filepath.Join(projectRoot, frontendDir)
+		}
+		pdb := primarySQLDB(ctx.DatabaseIDs)
+		switch ctx.ORMID {
+		case "prisma":
+			prismaProvider := "postgresql"
+			if pdb == "mysql" || pdb == "mariadb" {
+				prismaProvider = "mysql"
+			}
+			if pdb == "sqlite" {
+				prismaProvider = "sqlite"
+			}
+			fmt.Println("Writing prisma/schema.prisma...")
+			schemaContent, err := wiring.GeneratePrismaSchema(prismaProvider)
+			if err == nil {
+				schemaPath := filepath.Join(serviceDir, "prisma", "schema.prisma")
+				if mkErr := os.MkdirAll(filepath.Dir(schemaPath), 0o755); mkErr == nil {
+					_ = os.WriteFile(schemaPath, []byte(schemaContent), 0o644)
+				}
+				_ = os.WriteFile(filepath.Join(serviceDir, "prisma.config.ts"), []byte(wiring.GeneratePrismaConfig()), 0o644)
+			}
+		case "drizzle":
+			dialect, importPath := "postgresql", "node-postgres"
+			if pdb == "mysql" || pdb == "mariadb" {
+				dialect, importPath = "mysql", "mysql2"
+			}
+			if pdb == "sqlite" {
+				dialect, importPath = "sqlite", ""
+			}
+			fmt.Println("Writing drizzle.config.ts and src/db/index.ts...")
+			cfgContent, idxContent, err := wiring.GenerateDrizzleConfig(dialect, importPath)
+			if err == nil {
+				_ = os.WriteFile(filepath.Join(serviceDir, "drizzle.config.ts"), []byte(cfgContent), 0o644)
+				idxPath := filepath.Join(serviceDir, "src", "db", "index.ts")
+				if mkErr := os.MkdirAll(filepath.Dir(idxPath), 0o755); mkErr == nil {
+					_ = os.WriteFile(idxPath, []byte(idxContent), 0o644)
+				}
+			}
 		}
 	}
 
@@ -266,6 +317,9 @@ func main() {
 				}
 			}
 		}
+	}
+	if ctx.ORMID != "" {
+		fmt.Print(ormInstallInstructions(ctx.ORMID, primarySQLDB(ctx.DatabaseIDs)))
 	}
 }
 
@@ -510,6 +564,40 @@ get_footer();
 		return err
 	}
 	return nil
+}
+
+// primarySQLDB returns the first SQL database ID from the slice, or "".
+func primarySQLDB(ids []string) string {
+	sqlDBs := map[string]bool{"postgres": true, "mysql": true, "mariadb": true, "sqlite": true}
+	for _, id := range ids {
+		if sqlDBs[id] {
+			return id
+		}
+	}
+	return ""
+}
+
+// ormInstallInstructions returns next-step install commands for the chosen ORM.
+func ormInstallInstructions(ormID, primaryDBID string) string {
+	if ormID == "prisma" {
+		return "\nORM: Prisma\n  npm install prisma @prisma/client\n  npx prisma generate\n"
+	}
+	if ormID == "drizzle" {
+		var runtime, dev string
+		switch primaryDBID {
+		case "mysql", "mariadb":
+			runtime = "drizzle-orm mysql2 dotenv"
+			dev = "drizzle-kit tsx"
+		case "sqlite":
+			runtime = "drizzle-orm better-sqlite3 dotenv"
+			dev = "drizzle-kit tsx @types/better-sqlite3"
+		default: // postgres
+			runtime = "drizzle-orm pg dotenv"
+			dev = "drizzle-kit tsx @types/pg"
+		}
+		return fmt.Sprintf("\nORM: Drizzle\n  npm install %s\n  npm install -D %s\n", runtime, dev)
+	}
+	return ""
 }
 
 func wordpressThemeSlug(projectName string) string {
