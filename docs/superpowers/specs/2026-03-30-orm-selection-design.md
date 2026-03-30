@@ -271,13 +271,13 @@ const db = drizzle(process.env.DATABASE_URL!);
 export { db };
 ```
 
-For sqlite (`better-sqlite3` requires a `Database` instance, not a URL string):
+For sqlite (`better-sqlite3` requires a `Database` instance; `{ uri: true }` is needed because `DATABASE_URL` uses the `file:` prefix):
 ```typescript
 import 'dotenv/config';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import Database from 'better-sqlite3';
 
-const db = drizzle(new Database(process.env.DATABASE_URL!));
+const db = drizzle(new Database(process.env.DATABASE_URL!, { uri: true }));
 
 export { db };
 ```
