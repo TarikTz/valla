@@ -8,80 +8,163 @@ import (
 	"github.com/tariktz/valla-cli/internal/wiring"
 )
 
-func TestGenerateEnv_Postgres_LocalMode(t *testing.T) {
-	ctx := registry.WeldContext{
+func makeEnvCtx() registry.WeldContext {
+	return registry.WeldContext{
 		FrontendID:   "react",
 		BackendID:    "go-gin",
-		DatabaseID:   "postgres",
 		FrontendPort: 5173,
 		BackendPort:  8080,
-		DBHost:       "localhost",
-		DBPort:       5432,
-		DBUser:       "postgres",
-		DBPassword:   "postgres",
 		DBName:       "myapp",
 		EnvMode:      "local",
 	}
-	out := wiring.GenerateEnv(ctx, false)
+}
+
+func addDB(ctx registry.WeldContext, id string, cfg registry.DBConfig) registry.WeldContext {
+	ctx.DatabaseIDs = append(ctx.DatabaseIDs, id)
+	if ctx.DBConfigs == nil {
+		ctx.DBConfigs = map[string]registry.DBConfig{}
+	}
+	ctx.DBConfigs[id] = cfg
+	return ctx
+}
+
+func TestGenerateEnv_Postgres_LocalMode(t *testing.T) {
+	ctx := addDB(makeEnvCtx(), "postgres", registry.DBConfig{
+		Host: "localhost", Port: 5432, User: "postgres", Password: "postgres", Name: "myapp",
+	})
+	out := wiring.GenerateEnv(ctx)
 	if !strings.Contains(out, "BACKEND_PORT=8080") {
 		t.Error("expected BACKEND_PORT=8080")
 	}
-	if !strings.Contains(out, "DB_HOST=localhost") {
-		t.Error("expected DB_HOST=localhost")
+	if !strings.Contains(out, "POSTGRES_HOST=localhost") {
+		t.Error("expected POSTGRES_HOST=localhost")
+	}
+	if !strings.Contains(out, "POSTGRES_PORT=5432") {
+		t.Error("expected POSTGRES_PORT=5432")
+	}
+	if !strings.Contains(out, "POSTGRES_USER=postgres") {
+		t.Error("expected POSTGRES_USER=postgres")
+	}
+	if !strings.Contains(out, "POSTGRES_PASSWORD=postgres") {
+		t.Error("expected POSTGRES_PASSWORD=postgres")
+	}
+	if !strings.Contains(out, "POSTGRES_DB=myapp") {
+		t.Error("expected POSTGRES_DB=myapp")
 	}
 	if !strings.Contains(out, "VITE_API_URL=http://localhost:8080") {
 		t.Error("expected VITE_API_URL")
 	}
 }
 
-func TestGenerateEnv_SQLite(t *testing.T) {
-	ctx := registry.WeldContext{
-		FrontendID:   "react",
-		BackendID:    "go-gin",
-		DatabaseID:   "sqlite",
-		FrontendPort: 5173,
-		BackendPort:  8080,
-		DBPath:       "./data/app.db",
-		EnvMode:      "local",
+func TestGenerateEnv_MySQL(t *testing.T) {
+	ctx := addDB(makeEnvCtx(), "mysql", registry.DBConfig{
+		Host: "localhost", Port: 3306, User: "root", Password: "root", Name: "myapp",
+	})
+	out := wiring.GenerateEnv(ctx)
+	if !strings.Contains(out, "MYSQL_HOST=localhost") {
+		t.Error("expected MYSQL_HOST=localhost")
 	}
-	out := wiring.GenerateEnv(ctx, true)
-	if strings.Contains(out, "DB_HOST") {
-		t.Error("SQLite env should not contain DB_HOST")
+	if !strings.Contains(out, "MYSQL_DATABASE=myapp") {
+		t.Error("expected MYSQL_DATABASE=myapp")
+	}
+	if strings.Contains(out, "MYSQL_DB=") {
+		t.Error("MySQL should use MYSQL_DATABASE not MYSQL_DB")
+	}
+}
+
+func TestGenerateEnv_MariaDB(t *testing.T) {
+	ctx := addDB(makeEnvCtx(), "mariadb", registry.DBConfig{
+		Host: "localhost", Port: 3306, User: "root", Password: "root", Name: "myapp",
+	})
+	out := wiring.GenerateEnv(ctx)
+	if !strings.Contains(out, "MARIADB_HOST=localhost") {
+		t.Error("expected MARIADB_HOST=localhost")
+	}
+	if !strings.Contains(out, "MARIADB_DATABASE=myapp") {
+		t.Error("expected MARIADB_DATABASE=myapp")
+	}
+}
+
+func TestGenerateEnv_MongoDB(t *testing.T) {
+	ctx := addDB(makeEnvCtx(), "mongodb", registry.DBConfig{
+		Host: "localhost", Port: 27017, User: "root", Password: "root",
+	})
+	out := wiring.GenerateEnv(ctx)
+	if !strings.Contains(out, "MONGODB_HOST=localhost") {
+		t.Error("expected MONGODB_HOST=localhost")
+	}
+	if !strings.Contains(out, "MONGODB_USER=root") {
+		t.Error("expected MONGODB_USER=root")
+	}
+	if strings.Contains(out, "MONGODB_DB=") {
+		t.Error("MongoDB should not emit a DB name var")
+	}
+}
+
+func TestGenerateEnv_Redis(t *testing.T) {
+	ctx := addDB(makeEnvCtx(), "redis", registry.DBConfig{
+		Host: "localhost", Port: 6379,
+	})
+	out := wiring.GenerateEnv(ctx)
+	if !strings.Contains(out, "REDIS_HOST=localhost") {
+		t.Error("expected REDIS_HOST=localhost")
+	}
+	if !strings.Contains(out, "REDIS_PORT=6379") {
+		t.Error("expected REDIS_PORT=6379")
+	}
+	if strings.Contains(out, "REDIS_USER=") {
+		t.Error("Redis should not emit auth vars")
+	}
+}
+
+func TestGenerateEnv_SQLite(t *testing.T) {
+	ctx := addDB(makeEnvCtx(), "sqlite", registry.DBConfig{
+		Path: "./data/app.db", SQLite: true,
+	})
+	out := wiring.GenerateEnv(ctx)
+	if strings.Contains(out, "SQLITE_HOST") {
+		t.Error("SQLite env should not contain host var")
 	}
 	if !strings.Contains(out, "DB_PATH=./data/app.db") {
 		t.Error("expected DB_PATH")
 	}
 }
 
-func TestGenerateEnv_DockerMode_DBHost(t *testing.T) {
-	ctx := registry.WeldContext{
-		BackendID:  "go-gin",
-		DatabaseID: "postgres",
-		BackendPort: 8080,
-		DBHost:      "db",
-		DBPort:      5432,
-		DBUser:      "postgres",
-		DBPassword:  "postgres",
-		DBName:      "myapp",
-		EnvMode:     "docker",
+func TestGenerateEnv_PostgresAndRedis(t *testing.T) {
+	ctx := addDB(makeEnvCtx(), "postgres", registry.DBConfig{
+		Host: "localhost", Port: 5432, User: "postgres", Password: "postgres", Name: "myapp",
+	})
+	ctx = addDB(ctx, "redis", registry.DBConfig{
+		Host: "localhost", Port: 6379,
+	})
+	out := wiring.GenerateEnv(ctx)
+	if !strings.Contains(out, "POSTGRES_HOST=localhost") {
+		t.Error("expected POSTGRES_HOST")
 	}
-	out := wiring.GenerateEnv(ctx, false)
-	if !strings.Contains(out, "DB_HOST=db") {
-		t.Error("docker mode should set DB_HOST=db")
+	if !strings.Contains(out, "REDIS_HOST=localhost") {
+		t.Error("expected REDIS_HOST")
+	}
+	if strings.Contains(out, "DB_HOST=") {
+		t.Error("multi-DB should not emit legacy DB_HOST")
+	}
+}
+
+func TestGenerateEnv_DockerMode(t *testing.T) {
+	ctx := addDB(makeEnvCtx(), "postgres", registry.DBConfig{
+		Host: "db", Port: 5432, User: "postgres", Password: "postgres", Name: "myapp",
+	})
+	ctx.EnvMode = "docker"
+	out := wiring.GenerateEnv(ctx)
+	if !strings.Contains(out, "POSTGRES_HOST=db") {
+		t.Error("docker mode should set POSTGRES_HOST=db")
 	}
 }
 
 func TestGenerateEnv_NoDatabase(t *testing.T) {
-	ctx := registry.WeldContext{
-		FrontendID:   "react",
-		BackendID:    "go-gin",
-		FrontendPort: 5173,
-		BackendPort:  8080,
-		EnvMode:      "local",
-	}
-	out := wiring.GenerateEnv(ctx, false)
-	if strings.Contains(out, "DB_") {
-		t.Error("no DB selected — env should not contain DB_ vars")
+	ctx := makeEnvCtx()
+	out := wiring.GenerateEnv(ctx)
+	if strings.Contains(out, "DB_") || strings.Contains(out, "POSTGRES_") || strings.Contains(out, "REDIS_") {
+		t.Error("no DB selected — env should not contain any DB vars")
 	}
 }
 
@@ -91,7 +174,7 @@ func TestGenerateEnv_FrontendOnly(t *testing.T) {
 		FrontendPort: 5173,
 		EnvMode:      "local",
 	}
-	out := wiring.GenerateEnv(ctx, false)
+	out := wiring.GenerateEnv(ctx)
 	if !strings.Contains(out, "FRONTEND_PORT=5173") {
 		t.Error("expected FRONTEND_PORT")
 	}
