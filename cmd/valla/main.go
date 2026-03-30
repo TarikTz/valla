@@ -77,7 +77,8 @@ func main() {
 		}
 		fmt.Printf("\nWordPress project scaffolded successfully.\n\nNext steps:\n  cd %s\n  docker-compose up -d\n\n", ctx.ProjectName)
 		fmt.Printf("Open http://localhost:%d and finish the WordPress setup in the browser.\n", ctx.FrontendPort)
-		fmt.Printf("MySQL is preconfigured with DB=%s user=%s password=%s on host db:%d.\n", ctx.DBName, ctx.DBUser, ctx.DBPassword, ctx.DBPort)
+		mysqlCfg := ctx.DBConfigs["mysql"]
+		fmt.Printf("MySQL is preconfigured with DB=%s user=%s password=%s on host db:%d.\n", mysqlCfg.Name, mysqlCfg.User, mysqlCfg.Password, mysqlCfg.Port)
 		fmt.Printf("Develop themes locally in wordpress/wp-content/themes/%s.\n", wordpressThemeSlug(ctx.ProjectName))
 		return
 	}
@@ -132,11 +133,8 @@ func main() {
 		}
 	}
 
-	databaseEntry, _ := registry.FindByID(entries, ctx.DatabaseID)
-	isSQLite := databaseEntry.SQLite
-
 	fmt.Println("Writing .env...")
-	envContent := wiring.GenerateEnv(ctx, isSQLite)
+	envContent := wiring.GenerateEnv(ctx)
 	if err := os.WriteFile(filepath.Join(projectRoot, ".env"), []byte(envContent), 0o644); err != nil {
 		doRollback()
 		fmt.Fprintf(os.Stderr, "Failed to write .env: %v\n", err)
@@ -145,16 +143,23 @@ func main() {
 
 	if ctx.EnvMode == "docker" {
 		fmt.Println("Writing docker-compose.yml...")
-		var dbDocker *registry.DockerConfig
-		if databaseEntry.Docker != nil {
-			dbDocker = databaseEntry.Docker
+		var dbServices []wiring.DBServiceInput
+		for _, id := range ctx.DatabaseIDs {
+			entry, ok := registry.FindByID(entries, id)
+			if !ok {
+				continue
+			}
+			dbServices = append(dbServices, wiring.DBServiceInput{
+				ID:     id,
+				Docker: entry.Docker,
+				Config: ctx.DBConfigs[id],
+			})
 		}
 		composeContent, err := wiring.GenerateDockerCompose(wiring.DockerOptions{
 			Ctx:      ctx,
 			Frontend: frontendEntry.Docker,
 			Backend:  backendEntry.Docker,
-			DB:       dbDocker,
-			IsSQLite: isSQLite,
+			DBs:      dbServices,
 		})
 		if err != nil {
 			doRollback()
