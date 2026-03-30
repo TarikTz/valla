@@ -15,6 +15,12 @@ type DoneMsg struct{ NextSteps string }
 // ErrMsg signals a fatal error during scaffolding.
 type ErrMsg struct{ Err error }
 
+// UpdateAvailableMsg is sent by the update-checker goroutine in main.go
+// when a newer version of valla-cli is available on GitHub.
+type UpdateAvailableMsg struct {
+	Version string
+}
+
 var (
 	styleSpinnerIcon  = lipgloss.NewStyle().Foreground(lipgloss.Color("#7C3AED"))
 	styleSpinnerLabel = lipgloss.NewStyle().Foreground(lipgloss.Color("#DDDDDD"))
