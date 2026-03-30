@@ -25,6 +25,7 @@ type WeldContext struct {
 	FrontendPort   int
 	BackendPort    int
 	DBName         string // default schema/database name for all SQL DBs (derived from ProjectName)
+	ORMID          string // "prisma", "drizzle", or "" for none
 	OutputMode     string // "monorepo", "separate", or "wordpress"
 	EnvMode        string // "local" or "docker"
 }
@@ -71,6 +72,7 @@ type Entry struct {
 	DefaultPort       int                `yaml:"default_port"`
 	DBPathDefault     string             `yaml:"db_path_default"` // SQLite only
 	SQLite            bool               `yaml:"sqlite"`
+	ServerSide        bool               `yaml:"server_side"` // true for frontend frameworks with a server runtime (Next.js, Astro, SvelteKit, TanStack Start)
 	EnvVars           []string           `yaml:"env_vars"`
 	CorsPatch         *CorsPatch         `yaml:"cors_patch"`
 	HTTPClientPatch   *HTTPClientPatch   `yaml:"http_client_patch"`

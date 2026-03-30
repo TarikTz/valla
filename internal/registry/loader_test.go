@@ -204,3 +204,34 @@ func TestReadEmbeddedHelpers_NormalizeSourcePaths(t *testing.T) {
 		t.Fatal("expected embedded directory entries")
 	}
 }
+
+func TestLoad_ServerSideFrontends(t *testing.T) {
+	entries, err := registry.Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+
+	serverSideIDs := []string{"nextjs", "nextjs-bun", "astro", "astro-bun", "svelte", "svelte-bun", "tanstack", "tanstack-bun"}
+	notServerSideIDs := []string{"react", "react-bun", "vue", "vue-bun", "angular", "angular-bun"}
+
+	for _, id := range serverSideIDs {
+		entry, ok := registry.FindByID(entries, id)
+		if !ok {
+			t.Errorf("expected to find entry id=%s", id)
+			continue
+		}
+		if !entry.ServerSide {
+			t.Errorf("%s: expected server_side=true", id)
+		}
+	}
+	for _, id := range notServerSideIDs {
+		entry, ok := registry.FindByID(entries, id)
+		if !ok {
+			t.Errorf("expected to find entry id=%s", id)
+			continue
+		}
+		if entry.ServerSide {
+			t.Errorf("%s: expected server_side=false (SPA should not be server-side)", id)
+		}
+	}
+}

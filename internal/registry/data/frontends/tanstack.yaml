@@ -6,6 +6,7 @@ group: TanStack Start
 requires_runtime: node
 scaffold_cmd: "npm create tsrouter-app@latest {{.ScaffoldName}} -- --framework react --template start-basic --no-git"
 default_port: 3000
+server_side: true
 http_client_patch:
   file: app/api.ts
   mode: create
