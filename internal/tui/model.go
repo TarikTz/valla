@@ -80,6 +80,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case ErrMsg:
 		fmt.Printf("\nError: %v\n", msg.Err)
 		return m, tea.Quit
+	case UpdateAvailableMsg:
+		if msg.Version != "" {
+			m.updateNotice = fmt.Sprintf("  ⚡ Update available: %s  →  npm install -g valla-cli", msg.Version)
+		}
+		return m, nil
 	}
 
 	var cmd tea.Cmd

@@ -2,6 +2,7 @@ package main
 
 import (
 	"archive/zip"
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/fs"
@@ -11,6 +12,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/tariktz/valla-cli/internal/detector"
@@ -24,9 +26,29 @@ import (
 var version = "dev"
 
 func main() {
-	if len(os.Args) > 1 && (os.Args[1] == "--version" || os.Args[1] == "-version") {
-		fmt.Printf("valla-cli %s\n", version)
-		return
+	usage := func() {
+		fmt.Fprintf(os.Stderr, `valla-cli — Scaffold your full stack in seconds.
+
+Usage:
+  valla-cli           Run the interactive wizard
+  valla-cli --version Print version and exit
+  valla-cli --help    Show this help
+
+Environment:
+  VALLA_NO_UPDATE_CHECK=1  Disable the update checker
+
+`)
+	}
+
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "--version", "-version":
+			fmt.Printf("valla-cli %s\n", version)
+			return
+		case "--help", "-help", "-h":
+			usage()
+			return
+		}
 	}
 
 	entries, err := registry.Load()
@@ -59,6 +81,7 @@ func main() {
 
 	model := itui.New(entries, feRuntimeOpts, beRuntimeOpts)
 	program := tea.NewProgram(model)
+	startUpdateChecker(program, version)
 	finalModel, err := program.Run()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "TUI error: %v\n", err)
@@ -69,6 +92,9 @@ func main() {
 		os.Exit(0)
 	}
 	ctx := tuiModel.Context()
+	fmt.Println()
+	fmt.Println(renderSummaryCard(ctx, entries))
+	fmt.Println()
 
 	// WordPress always gets a dedicated root directory.
 	if ctx.OutputMode == "wordpress" {
@@ -82,11 +108,7 @@ func main() {
 			fmt.Fprintf(os.Stderr, "WordPress scaffolding failed: %v\n", err)
 			os.Exit(1)
 		}
-		fmt.Printf("\nWordPress project scaffolded successfully.\n\nNext steps:\n  cd %s\n  docker-compose up -d\n\n", ctx.ProjectName)
-		fmt.Printf("Open http://localhost:%d and finish the WordPress setup in the browser.\n", ctx.FrontendPort)
-		mysqlCfg := ctx.DBConfigs["mysql"]
-		fmt.Printf("MySQL is preconfigured with DB=%s user=%s password=%s on host db:%d.\n", mysqlCfg.Name, mysqlCfg.User, mysqlCfg.Password, mysqlCfg.Port)
-		fmt.Printf("Develop themes locally in wordpress/wp-content/themes/%s.\n", wordpressThemeSlug(ctx.ProjectName))
+		fmt.Print(renderSuccessOutput(ctx, "", "", registry.Entry{}, registry.Entry{}, ""))
 		return
 	}
 
@@ -121,8 +143,8 @@ func main() {
 	var frontendEntry registry.Entry
 	if ctx.FrontendID != "" {
 		frontendEntry, _ = registry.FindByID(entries, ctx.FrontendID)
-		fmt.Printf("Scaffolding frontend (%s)...\n", frontendEntry.Name)
-		if err := runScaffold(ctx, frontendEntry, projectRoot, frontendDir); err != nil {
+		printStage(fmt.Sprintf("Scaffolding frontend (%s)...", frontendEntry.Name))
+		if err := runScaffold(ctx, frontendEntry, projectRoot, frontendDir, true); err != nil {
 			doRollback()
 			fmt.Fprintf(os.Stderr, "Frontend scaffolding failed: %v\n", err)
 			os.Exit(1)
@@ -132,15 +154,15 @@ func main() {
 	var backendEntry registry.Entry
 	if ctx.BackendID != "" {
 		backendEntry, _ = registry.FindByID(entries, ctx.BackendID)
-		fmt.Printf("Scaffolding backend (%s)...\n", backendEntry.Name)
-		if err := runScaffold(ctx, backendEntry, projectRoot, backendDir); err != nil {
+		printStage(fmt.Sprintf("Scaffolding backend (%s)...", backendEntry.Name))
+		if err := runScaffold(ctx, backendEntry, projectRoot, backendDir, true); err != nil {
 			doRollback()
 			fmt.Fprintf(os.Stderr, "Backend scaffolding failed: %v\n", err)
 			os.Exit(1)
 		}
 	}
 
-	fmt.Println("Writing .env...")
+	printStage("Wiring environment...")
 	envContent := wiring.GenerateEnv(ctx)
 	if err := os.WriteFile(filepath.Join(projectRoot, ".env"), []byte(envContent), 0o644); err != nil {
 		doRollback()
@@ -149,7 +171,7 @@ func main() {
 	}
 
 	if ctx.EnvMode == "docker" {
-		fmt.Println("Writing docker-compose.yml...")
+		printStage("Generating Docker config...")
 		var dbServices []wiring.DBServiceInput
 		for _, id := range ctx.DatabaseIDs {
 			entry, ok := registry.FindByID(entries, id)
@@ -181,7 +203,6 @@ func main() {
 	}
 
 	if ctx.BackendID != "" && ctx.FrontendID != "" && backendEntry.CorsPatch != nil {
-		fmt.Println("Configuring CORS...")
 		corsFile := filepath.Join(projectRoot, backendDir, backendEntry.CorsPatch.File)
 		source, err := os.ReadFile(corsFile)
 		if err != nil {
@@ -200,7 +221,6 @@ func main() {
 	}
 
 	if ctx.FrontendID != "" && frontendEntry.HTTPClientPatch != nil {
-		fmt.Println("Configuring HTTP client...")
 		apiURL := fmt.Sprintf("http://localhost:%d", ctx.BackendPort)
 		if ctx.EnvMode == "docker" {
 			apiURL = fmt.Sprintf("http://backend:%d", ctx.BackendPort)
@@ -213,6 +233,7 @@ func main() {
 	}
 
 	if ctx.ORMID != "" {
+		printStage("Injecting ORM config...")
 		var serviceDir string
 		if ctx.BackendID != "" {
 			serviceDir = filepath.Join(projectRoot, backendDir)
@@ -229,7 +250,6 @@ func main() {
 			if pdb == "sqlite" {
 				prismaProvider = "sqlite"
 			}
-			fmt.Println("Writing prisma/schema.prisma...")
 			schemaContent, err := wiring.GeneratePrismaSchema(prismaProvider)
 			if err == nil {
 				schemaPath := filepath.Join(serviceDir, "prisma", "schema.prisma")
@@ -246,7 +266,6 @@ func main() {
 			if pdb == "sqlite" {
 				dialect, importPath = "sqlite", ""
 			}
-			fmt.Println("Writing drizzle.config.ts and src/db/index.ts...")
 			cfgContent, idxContent, err := wiring.GenerateDrizzleConfig(dialect, importPath)
 			if err == nil {
 				_ = os.WriteFile(filepath.Join(serviceDir, "drizzle.config.ts"), []byte(cfgContent), 0o644)
@@ -258,81 +277,17 @@ func main() {
 		}
 	}
 
-	fmt.Printf("\nProject scaffolded successfully.\n\n")
-	if ctx.EnvMode == "docker" {
-		if isSeparate {
-			fmt.Println("Next steps:")
-			fmt.Println("  docker-compose up -d")
-		} else {
-			fmt.Printf("Next steps:\n  cd %s\n  docker-compose up -d\n", ctx.ProjectName)
-		}
-	} else {
-		if isSeparate {
-			fmt.Println("Next steps:")
-			if ctx.FrontendID != "" {
-				fmt.Printf("  cd %s && npm install\n", frontendDir)
-			}
-			if ctx.BackendID != "" {
-				switch backendEntry.Runtime {
-				case "go":
-					fmt.Printf("  cd %s && go run main.go\n", backendDir)
-				case "python3":
-					fmt.Printf("  cd %s && source venv/bin/activate && python ...\n", backendDir)
-				case "dotnet":
-					fmt.Printf("  cd %s && dotnet run\n", backendDir)
-				case "java":
-					switch backendEntry.ID {
-					case "java-springboot-maven":
-						fmt.Printf("  cd %s && mvn spring-boot:run\n", backendDir)
-					case "java-springboot-gradle":
-						fmt.Printf("  cd %s && ./gradlew bootRun\n", backendDir)
-					case "java-quarkus-maven":
-						fmt.Printf("  cd %s && mvn quarkus:dev\n", backendDir)
-					case "java-quarkus-gradle":
-						fmt.Printf("  cd %s && ./gradlew quarkusDev\n", backendDir)
-					}
-				default:
-					fmt.Printf("  cd %s && npm install && npm start\n", backendDir)
-				}
-			}
-		} else {
-			fmt.Printf("Next steps:\n  cd %s\n\n", ctx.ProjectName)
-			if ctx.FrontendID != "" {
-				fmt.Printf("  npm install    (in /%s)\n", frontendDir)
-			}
-			if ctx.BackendID != "" {
-				switch backendEntry.Runtime {
-				case "go":
-					fmt.Printf("  go run main.go (in /%s)\n", backendDir)
-				case "python3":
-					fmt.Printf("  source venv/bin/activate && python ... (in /%s)\n", backendDir)
-				case "dotnet":
-					fmt.Printf("  dotnet run (in /%s)\n", backendDir)
-				case "java":
-					switch backendEntry.ID {
-					case "java-springboot-maven":
-						fmt.Printf("  mvn spring-boot:run (in /%s)\n", backendDir)
-					case "java-springboot-gradle":
-						fmt.Printf("  ./gradlew bootRun (in /%s)\n", backendDir)
-					case "java-quarkus-maven":
-						fmt.Printf("  mvn quarkus:dev (in /%s)\n", backendDir)
-					case "java-quarkus-gradle":
-						fmt.Printf("  ./gradlew quarkusDev (in /%s)\n", backendDir)
-					}
-				default:
-					fmt.Printf("  npm install && npm start (in /%s)\n", backendDir)
-				}
-			}
-		}
-	}
+	clearStage()
+	var ormInstr string
 	if ctx.ORMID != "" {
-		fmt.Print(ormInstallInstructions(ctx.ORMID, primarySQLDB(ctx.DatabaseIDs)))
+		ormInstr = ormInstallInstructions(ctx.ORMID, primarySQLDB(ctx.DatabaseIDs))
 	}
+	fmt.Print(renderSuccessOutput(ctx, frontendDir, backendDir, frontendEntry, backendEntry, ormInstr))
 }
 
 // runScaffold handles one service: runs scaffold_cmd (or copies builtin_template),
 // writes post_scaffold_files, and renames the output directory to targetDir.
-func runScaffold(ctx registry.WeldContext, entry registry.Entry, root, targetDir string) error {
+func runScaffold(ctx registry.WeldContext, entry registry.Entry, root, targetDir string, quiet bool) error {
 	tempName := scaffoldTempName(targetDir)
 	ctx.ScaffoldName = tempName
 	ctx.JavaArtifactID = strings.ReplaceAll(tempName, "-", "_")
@@ -350,9 +305,18 @@ func runScaffold(ctx registry.WeldContext, entry registry.Entry, root, targetDir
 		}
 		cmd.Dir = root
 		cmd.Env = append(os.Environ(), "CI=1", "npm_config_yes=true")
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
+		var stderrBuf strings.Builder
+		if quiet {
+			cmd.Stdout = nil
+			cmd.Stderr = &stderrBuf
+		} else {
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+		}
 		if err := cmd.Run(); err != nil {
+			if quiet && stderrBuf.Len() > 0 {
+				return fmt.Errorf("scaffold_cmd failed: %w\n%s", err, stderrBuf.String())
+			}
 			return fmt.Errorf("scaffold_cmd failed: %w", err)
 		}
 	} else if entry.BuiltinTemplate != "" {
@@ -605,6 +569,207 @@ func ormInstallInstructions(ormID, primaryDBID string) string {
 		return fmt.Sprintf("\nORM: Drizzle\n  npm install %s\n  npm install -D %s\n", runtime, dev)
 	}
 	return ""
+}
+
+// printStage prints a named scaffolding stage to stdout using a leading spinner char.
+// Call it before each major step; it overwrites the previous line via \r.
+func printStage(msg string) {
+	fmt.Printf("\r\033[K⠸ %s", msg)
+}
+
+// clearStage clears the current spinner line.
+func clearStage() {
+	fmt.Print("\r\033[K")
+}
+
+// renderSummaryCard returns a lipgloss-bordered box summarising the user's choices.
+// It is displayed in main.go after the TUI exits, before scaffolding begins.
+func renderSummaryCard(ctx registry.WeldContext, entries []registry.Entry) string {
+	header := itui.StyleCardHeader.Render("valla  ·  " + ctx.ProjectName)
+
+	var rows []string
+
+	if ctx.OutputMode == "wordpress" {
+		mysqlCfg := ctx.DBConfigs["mysql"]
+		rows = append(rows,
+			itui.StyleCardLabel.Render("Mode")+" "+itui.StyleCardValue.Render("WordPress · Docker"),
+			itui.StyleCardLabel.Render("WordPress")+" "+itui.StyleCardValue.Render(fmt.Sprintf("port %d", ctx.FrontendPort)),
+			itui.StyleCardLabel.Render("MySQL")+" "+itui.StyleCardValue.Render(fmt.Sprintf("port %d", mysqlCfg.Port)),
+		)
+	} else {
+		modeVal := capitalize(ctx.OutputMode) + " · " + capitalize(ctx.EnvMode)
+		rows = append(rows, itui.StyleCardLabel.Render("Mode")+" "+itui.StyleCardValue.Render(modeVal))
+
+		if ctx.FrontendID != "" {
+			feEntry, _ := registry.FindByID(entries, ctx.FrontendID)
+			rows = append(rows, itui.StyleCardLabel.Render("Frontend")+" "+itui.StyleCardValue.Render(feEntry.Name+" ("+feEntry.Runtime+")"))
+		}
+		if ctx.BackendID != "" {
+			beEntry, _ := registry.FindByID(entries, ctx.BackendID)
+			rows = append(rows, itui.StyleCardLabel.Render("Backend")+" "+itui.StyleCardValue.Render(beEntry.Name+" ("+beEntry.Runtime+")"))
+		}
+		if len(ctx.DatabaseIDs) > 0 {
+			var dbNames []string
+			for _, id := range ctx.DatabaseIDs {
+				e, _ := registry.FindByID(entries, id)
+				dbNames = append(dbNames, e.Name)
+			}
+			rows = append(rows, itui.StyleCardLabel.Render("Database")+" "+itui.StyleCardValue.Render(strings.Join(dbNames, " + ")))
+		}
+		if len(ctx.DatabaseIDs) > 0 {
+			ormLabel := "None"
+			if ctx.ORMID == "prisma" {
+				ormLabel = "Prisma"
+			} else if ctx.ORMID == "drizzle" {
+				ormLabel = "Drizzle"
+			}
+			rows = append(rows, itui.StyleCardLabel.Render("ORM")+" "+itui.StyleCardValue.Render(ormLabel))
+		}
+	}
+
+	body := header + "\n\n" + strings.Join(rows, "\n")
+	return itui.StyleCardBorder.Render(body)
+}
+
+// capitalize title-cases the first letter of s.
+func capitalize(s string) string {
+	if s == "" {
+		return ""
+	}
+	return strings.ToUpper(s[:1]) + s[1:]
+}
+
+// renderSuccessOutput returns the styled completion message printed after scaffolding.
+// ormInstructions is the raw string from ormInstallInstructions (may be empty).
+func renderSuccessOutput(ctx registry.WeldContext, frontendDir, backendDir string, feEntry, beEntry registry.Entry, ormInstructions string) string {
+	var sb strings.Builder
+
+	sb.WriteString("\n")
+	sb.WriteString(itui.StyleSuccessHeader.Render("✓  Done!"))
+	sb.WriteString("\n\n")
+
+	// Directory tree
+	if ctx.OutputMode == "wordpress" {
+		tree := fmt.Sprintf("%s/\n  wordpress/\n  .env\n  docker-compose.yml", ctx.ProjectName)
+		sb.WriteString(itui.StyleSuccessTree.Render(tree))
+	} else if ctx.OutputMode == "separate" {
+		tree := fmt.Sprintf("%s/\n%s/\n.env", frontendDir, backendDir)
+		if ctx.EnvMode == "docker" {
+			tree += "\ndocker-compose.yml"
+		}
+		sb.WriteString(itui.StyleSuccessTree.Render(tree))
+	} else {
+		var children []string
+		if ctx.FrontendID != "" {
+			children = append(children, "  "+frontendDir+"/")
+		}
+		if ctx.BackendID != "" {
+			children = append(children, "  "+backendDir+"/")
+		}
+		children = append(children, "  .env")
+		if ctx.EnvMode == "docker" {
+			children = append(children, "  docker-compose.yml")
+		}
+		tree := ctx.ProjectName + "/\n" + strings.Join(children, "\n")
+		sb.WriteString(itui.StyleSuccessTree.Render(tree))
+	}
+
+	sb.WriteString("\n\n")
+
+	// Next steps
+	sb.WriteString("Next steps:\n\n")
+	if ctx.OutputMode == "wordpress" {
+		sb.WriteString(itui.StyleSuccessCmd.Render(fmt.Sprintf("  cd %s && docker-compose up -d", ctx.ProjectName)))
+		sb.WriteString(fmt.Sprintf("\n\nThen open http://localhost:%d to finish WordPress setup.", ctx.FrontendPort))
+	} else if ctx.EnvMode == "docker" {
+		if ctx.OutputMode == "separate" {
+			sb.WriteString(itui.StyleSuccessCmd.Render("  docker-compose up -d"))
+		} else {
+			sb.WriteString(itui.StyleSuccessCmd.Render(fmt.Sprintf("  cd %s && docker-compose up -d", ctx.ProjectName)))
+		}
+	} else {
+		if ctx.OutputMode != "separate" {
+			sb.WriteString(itui.StyleSuccessCmd.Render(fmt.Sprintf("  cd %s", ctx.ProjectName)))
+			sb.WriteString("\n")
+		}
+		if ctx.FrontendID != "" {
+			sb.WriteString(itui.StyleSuccessCmd.Render(fmt.Sprintf("  cd %s && npm install", frontendDir)))
+			sb.WriteString("\n")
+		}
+		if ctx.BackendID != "" {
+			cmd := localRunCmd(beEntry, backendDir)
+			sb.WriteString(itui.StyleSuccessCmd.Render("  " + cmd))
+			sb.WriteString("\n")
+		}
+	}
+
+	if ormInstructions != "" {
+		sb.WriteString("\n")
+		sb.WriteString(ormInstructions)
+	}
+
+	sb.WriteString("\n")
+	return sb.String()
+}
+
+// localRunCmd returns the run command string for a backend in local (.env) mode.
+func localRunCmd(entry registry.Entry, dir string) string {
+	switch entry.Runtime {
+	case "go":
+		return fmt.Sprintf("cd %s && go run main.go", dir)
+	case "python3":
+		return fmt.Sprintf("cd %s && source venv/bin/activate && python ...", dir)
+	case "dotnet":
+		return fmt.Sprintf("cd %s && dotnet run", dir)
+	case "java":
+		switch entry.ID {
+		case "java-springboot-maven":
+			return fmt.Sprintf("cd %s && mvn spring-boot:run", dir)
+		case "java-springboot-gradle":
+			return fmt.Sprintf("cd %s && ./gradlew bootRun", dir)
+		case "java-quarkus-maven":
+			return fmt.Sprintf("cd %s && mvn quarkus:dev", dir)
+		case "java-quarkus-gradle":
+			return fmt.Sprintf("cd %s && ./gradlew quarkusDev", dir)
+		}
+	}
+	return fmt.Sprintf("cd %s && npm install && npm start", dir)
+}
+
+// parseTagFromBody extracts the tag_name field from a GitHub releases API JSON response.
+func parseTagFromBody(body []byte) string {
+	var payload struct {
+		TagName string `json:"tag_name"`
+	}
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return ""
+	}
+	return payload.TagName
+}
+
+// startUpdateChecker launches a goroutine that checks GitHub for a newer release
+// and sends UpdateAvailableMsg to program if one is found.
+// It is a no-op if VALLA_NO_UPDATE_CHECK=1 is set or if version == "dev".
+func startUpdateChecker(program *tea.Program, currentVersion string) {
+	if os.Getenv("VALLA_NO_UPDATE_CHECK") == "1" || currentVersion == "dev" {
+		return
+	}
+	go func() {
+		client := &http.Client{Timeout: 3 * time.Second}
+		resp, err := client.Get("https://api.github.com/repos/tariktz/valla/releases/latest")
+		if err != nil {
+			return
+		}
+		defer resp.Body.Close()
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return
+		}
+		latest := parseTagFromBody(body)
+		if latest != "" && latest != currentVersion {
+			program.Send(itui.UpdateAvailableMsg{Version: latest})
+		}
+	}()
 }
 
 func wordpressThemeSlug(projectName string) string {

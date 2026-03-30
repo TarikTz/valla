@@ -1,18 +1,30 @@
-# valla-cli
+<div align="center">
 
-[![npm version](https://img.shields.io/npm/v/valla-cli.svg)](https://www.npmjs.com/package/valla-cli)
-[![npm downloads](https://img.shields.io/npm/dm/valla-cli.svg)](https://www.npmjs.com/package/valla-cli)
-[![GitHub release](https://img.shields.io/github/v/release/tariktz/valla)](https://github.com/tariktz/valla/releases)
-[![License: MIT](https://img.shields.io/github/license/tariktz/valla)](https://github.com/tariktz/valla/blob/main/LICENSE)
+```
+ ██╗   ██╗  █████╗  ██╗      ██╗       █████╗
+ ██║   ██║ ██╔══██╗ ██║      ██║      ██╔══██╗
+ ██║   ██║ ███████║ ██║      ██║      ███████║
+ ╚██╗ ██╔╝ ██╔══██║ ██║      ██║      ██╔══██║
+  ╚████╔╝  ██║  ██║ ███████╗ ███████╗ ██║  ██║
+   ╚═══╝   ╚═╝  ╚═╝ ╚══════╝ ╚══════╝ ╚═╝  ╚═╝
+```
+
+**Scaffold your full stack in seconds.**
+
+[![npm version](https://img.shields.io/npm/v/valla-cli)](https://www.npmjs.com/package/valla-cli)
+[![CI](https://github.com/tariktz/valla/actions/workflows/ci.yml/badge.svg)](https://github.com/tariktz/valla/actions/workflows/ci.yml)
 [![Go version](https://img.shields.io/github/go-mod/go-version/tariktz/valla)](go.mod)
+[![License](https://img.shields.io/github/license/tariktz/valla)](LICENSE)
 
-Stop assembling stacks by hand. `valla-cli` scaffolds frontend, backend, database, and Docker wiring in a single interactive flow — from zero to a running project in minutes.
+![valla demo](demo.gif)
 
-valla-cli is an **open source** project. Contributions are welcome — see [Contributing](#contributing) below.
+</div>
 
-## Quick Start
+---
 
-**npm (recommended):**
+Stop wiring up frontend, backend, database, and Docker by hand. Valla scaffolds your entire stack in one terminal flow — pick your frameworks, hit Enter, and get a production-ready project structure with environment config and Docker Compose included.
+
+## Quickstart
 
 ```bash
 npx valla-cli
@@ -22,37 +34,7 @@ Or install globally:
 
 ```bash
 npm install -g valla-cli
-valla-cli
 ```
-
-On first run, the correct pre-built binary for your platform is downloaded and cached automatically. No Go installation needed when using npm.
-
-**Run from source:**
-
-```bash
-git clone https://github.com/tariktz/valla
-cd valla
-go run ./cmd/valla
-```
-
-**Build a local binary:**
-
-```bash
-go build -o valla-cli ./cmd/valla
-./valla-cli
-```
-
-## What It Does
-
-- Scaffolds frontend and backend together in a single interactive terminal flow
-- Generates `.env` for local development
-- Generates `docker-compose.yml` for containerized development
-- Wires frontend API defaults to the selected backend port automatically
-- Injects backend CORS configuration for supported backends
-- Supports monorepo and separate-folder output modes
-- Includes a dedicated WordPress mode with Docker services and a starter theme
-- Supports multiple databases simultaneously (e.g. PostgreSQL + Redis)
-- Optionally generates ORM configuration files (Prisma or Drizzle) for eligible stacks
 
 ## Supported Stacks
 
