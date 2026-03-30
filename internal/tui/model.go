@@ -42,7 +42,8 @@ type Model struct {
 	selectedFERuntime string
 	selectedBERuntime string
 
-	confirmed bool
+	confirmed    bool
+	updateNotice string
 }
 
 // New creates the root model. feRuntimeOpts and beRuntimeOpts include all known runtimes,
@@ -429,7 +430,7 @@ func (m Model) View() string {
 	if m.phase == phaseDone {
 		return ""
 	}
-	return banner() + "\n\n" + m.current.View()
+	return banner(m.updateNotice) + "\n\n" + m.current.View()
 }
 
 // Context returns the final WeldContext after the TUI completes.
