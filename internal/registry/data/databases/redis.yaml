@@ -1,0 +1,7 @@
+id: redis
+name: Redis
+type: database
+default_port: 6379
+docker:
+  image: redis:7-alpine
+  volume_path: /data

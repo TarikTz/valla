@@ -2,6 +2,7 @@ package registry_test
 
 import (
 	"io/fs"
+	"strings"
 	"testing"
 
 	"github.com/tariktz/valla-cli/internal/registry"
@@ -116,6 +117,68 @@ func TestLoad_QuarkusEntries(t *testing.T) {
 		}
 		if len(entry.PostScaffoldFiles) != 2 {
 			t.Errorf("%s: expected 2 post_scaffold_files, got %d", id, len(entry.PostScaffoldFiles))
+		}
+	}
+}
+
+func TestLoad_NewDatabaseEntries(t *testing.T) {
+	entries, err := registry.Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+
+	tests := []struct {
+		id          string
+		name        string
+		defaultPort int
+		wantDocker  bool
+	}{
+		{"mysql", "MySQL", 3306, true},
+		{"mariadb", "MariaDB", 3306, true},
+		{"mongodb", "MongoDB", 27017, true},
+		{"redis", "Redis", 6379, true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.id, func(t *testing.T) {
+			entry, ok := registry.FindByID(entries, tc.id)
+			if !ok {
+				t.Fatalf("expected to find entry id=%s", tc.id)
+			}
+			if entry.Type != "database" {
+				t.Errorf("%s: expected type=database, got %s", tc.id, entry.Type)
+			}
+			if entry.DefaultPort != tc.defaultPort {
+				t.Errorf("%s: expected DefaultPort=%d, got %d", tc.id, tc.defaultPort, entry.DefaultPort)
+			}
+			if tc.wantDocker && entry.Docker == nil {
+				t.Errorf("%s: expected docker config to be set", tc.id)
+			}
+			if tc.wantDocker && entry.Docker.Image == "" {
+				t.Errorf("%s: expected docker image to be non-empty", tc.id)
+			}
+			if tc.wantDocker && entry.Docker.VolumePath == "" {
+				t.Errorf("%s: expected docker volume_path to be set", tc.id)
+			}
+		})
+	}
+}
+
+func TestLoad_PostgresDockerUsesNewTemplateVars(t *testing.T) {
+	entries, _ := registry.Load()
+	entry, ok := registry.FindByID(entries, "postgres")
+	if !ok {
+		t.Fatal("expected postgres entry")
+	}
+	if entry.Docker == nil {
+		t.Fatal("expected docker config")
+	}
+	oldFields := []string{".DBUser", ".DBPassword", ".DBName", ".DBHost", ".DBPort"}
+	for k, v := range entry.Docker.EnvVars {
+		for _, old := range oldFields {
+			if strings.Contains(v, old) {
+				t.Errorf("postgres docker env var %s still uses old template field %s: %q", k, old, v)
+			}
 		}
 	}
 }
