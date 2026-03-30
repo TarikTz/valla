@@ -1,0 +1,10 @@
+id: mongodb
+name: MongoDB
+type: database
+default_port: 27017
+docker:
+  image: mongo:7
+  volume_path: /data/db
+  env_vars:
+    MONGO_INITDB_ROOT_USERNAME: "{{.User}}"
+    MONGO_INITDB_ROOT_PASSWORD: "{{.Password}}"

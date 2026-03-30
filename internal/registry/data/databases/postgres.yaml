@@ -4,7 +4,8 @@ type: database
 default_port: 5432
 docker:
   image: postgres:16-alpine
+  volume_path: /var/lib/postgresql/data
   env_vars:
-    POSTGRES_USER: "{{.DBUser}}"
-    POSTGRES_PASSWORD: "{{.DBPassword}}"
-    POSTGRES_DB: "{{.DBName}}"
+    POSTGRES_USER: "{{.User}}"
+    POSTGRES_PASSWORD: "{{.Password}}"
+    POSTGRES_DB: "{{.Name}}"
