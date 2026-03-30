@@ -21,7 +21,14 @@ import (
 	"github.com/tariktz/valla-cli/internal/wiring"
 )
 
+var version = "dev"
+
 func main() {
+	if len(os.Args) > 1 && (os.Args[1] == "--version" || os.Args[1] == "-version") {
+		fmt.Printf("valla-cli %s\n", version)
+		return
+	}
+
 	entries, err := registry.Load()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to load registry: %v\n", err)
