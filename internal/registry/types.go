@@ -1,23 +1,38 @@
 package registry
 
+// DBConfig holds per-database connection credentials and addressing.
+// Keyed by registry ID in WeldContext.DBConfigs.
+// Invariant: SQLite is true if and only if Path is non-empty.
+type DBConfig struct {
+	Host     string
+	Port     int
+	User     string
+	Password string
+	Name     string // schema/database name; empty for Redis and MongoDB
+	Path     string // SQLite only — non-empty signals file-based DB
+	SQLite   bool   // true for SQLite; drives env/docker branching logic
+}
+
 // WeldContext holds all user choices and is used for template rendering throughout.
 type WeldContext struct {
-	ProjectName  string // final project name (step 1)
-	ScaffoldName   string // temporary name passed to scaffold_cmd (e.g. "valla-tmp-frontend")
-	JavaArtifactID string // ScaffoldName with hyphens replaced by underscores (valid Java artifact ID)
-	FrontendID   string // selected frontend registry entry ID (e.g. "react")
-	BackendID    string // selected backend registry entry ID (e.g. "go-gin")
-	DatabaseID   string // selected database registry entry ID (e.g. "postgres")
-	FrontendPort int
-	BackendPort  int
-	DBPort       int    // 0 for SQLite
-	DBHost       string // "localhost" (local) or "db" (docker)
-	DBUser       string
-	DBPassword   string
-	DBName       string
-	DBPath       string // SQLite only
-	OutputMode   string // "monorepo", "separate", or "wordpress"
-	EnvMode      string // "local" or "docker"
+	ProjectName    string              // final project name (step 1)
+	ScaffoldName   string              // temporary name passed to scaffold_cmd (e.g. "valla-tmp-frontend")
+	JavaArtifactID string              // ScaffoldName with hyphens replaced by underscores (valid Java artifact ID)
+	FrontendID     string              // selected frontend registry entry ID (e.g. "react")
+	BackendID      string              // selected backend registry entry ID (e.g. "go-gin")
+	DatabaseID     string              // selected database registry entry ID (e.g. "postgres")
+	DatabaseIDs    []string            // selected database registry IDs (multi-select)
+	DBConfigs      map[string]DBConfig // per-DB credentials keyed by registry ID
+	FrontendPort   int
+	BackendPort    int
+	DBPort         int    // 0 for SQLite
+	DBHost         string // "localhost" (local) or "db" (docker)
+	DBUser         string
+	DBPassword     string
+	DBName         string
+	DBPath         string // SQLite only
+	OutputMode     string // "monorepo", "separate", or "wordpress"
+	EnvMode        string // "local" or "docker"
 }
 
 // DockerConfig describes how a service is containerized.
@@ -26,6 +41,7 @@ type DockerConfig struct {
 	BuildContext string            `yaml:"build_context"`
 	Dockerfile   string            `yaml:"dockerfile"`
 	EnvVars      map[string]string `yaml:"env_vars"`
+	VolumePath   string            `yaml:"volume_path"` // container-side volume mount path; empty = no volume
 }
 
 // CorsPatch describes how to inject CORS config into a backend file.
