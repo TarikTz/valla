@@ -11,11 +11,17 @@ import (
 func TestGenerateWordPressEnv(t *testing.T) {
 	ctx := registry.WeldContext{
 		FrontendPort: 8080,
-		DBPort:       3306,
-		DBHost:       "db",
 		DBName:       "my_blog",
-		DBUser:       "wordpress",
-		DBPassword:   "wordpress",
+		DatabaseIDs:  []string{"mysql"},
+		DBConfigs: map[string]registry.DBConfig{
+			"mysql": {
+				Port:     3306,
+				Host:     "db",
+				User:     "wordpress",
+				Password: "wordpress",
+				Name:     "my_blog",
+			},
+		},
 	}
 	out := wiring.GenerateWordPressEnv(ctx)
 	for _, expected := range []string{

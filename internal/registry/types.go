@@ -20,17 +20,11 @@ type WeldContext struct {
 	JavaArtifactID string              // ScaffoldName with hyphens replaced by underscores (valid Java artifact ID)
 	FrontendID     string              // selected frontend registry entry ID (e.g. "react")
 	BackendID      string              // selected backend registry entry ID (e.g. "go-gin")
-	DatabaseID     string              // selected database registry entry ID (e.g. "postgres")
 	DatabaseIDs    []string            // selected database registry IDs (multi-select)
 	DBConfigs      map[string]DBConfig // per-DB credentials keyed by registry ID
 	FrontendPort   int
 	BackendPort    int
-	DBPort         int    // 0 for SQLite
-	DBHost         string // "localhost" (local) or "db" (docker)
-	DBUser         string
-	DBPassword     string
-	DBName         string
-	DBPath         string // SQLite only
+	DBName         string // default schema/database name for all SQL DBs (derived from ProjectName)
 	OutputMode     string // "monorepo", "separate", or "wordpress"
 	EnvMode        string // "local" or "docker"
 }
