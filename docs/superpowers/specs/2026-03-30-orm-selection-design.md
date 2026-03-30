@@ -169,8 +169,7 @@ The ORM files are written into the Node service directory. `serviceDir` resolves
 |---|---|
 | `monorepo` | `{projectRoot}/backend` |
 | `separate` | `{projectName}-backend` (sibling of cwd, no shared root) |
-| `frontend-only` (monorepo) | `{projectRoot}/frontend` |
-| `frontend-only` (separate) | `{projectName}-frontend` |
+| `frontend-only` | `{projectRoot}/frontend` (always has a project root; no separate sub-mode exists) |
 | `backend-only` | `{projectRoot}/backend` |
 
 This mirrors how `main.go` already resolves `frontendDir` and `backendDir` per output mode.
@@ -185,7 +184,19 @@ When `ctx.ORMID != ""`, `GenerateEnv` emits one additional line — a composed `
 |---|---|
 | `postgres` | `postgresql://{{POSTGRES_USER}}:{{POSTGRES_PASSWORD}}@{{POSTGRES_HOST}}:{{POSTGRES_PORT}}/{{POSTGRES_DB}}` |
 | `mysql` / `mariadb` | `mysql://{{MYSQL_USER}}:{{MYSQL_PASSWORD}}@{{MYSQL_HOST}}:{{MYSQL_PORT}}/{{MYSQL_DATABASE}}` (or `MARIADB_*` prefix) |
-| `sqlite` | `{{DB_PATH}}` (Drizzle sqlite uses the path directly; Prisma uses the file path) |
+| `sqlite` | `file:{{DB_PATH}}` — Prisma requires the `file:` URI scheme; `better-sqlite3` supports it via the `{ uri: true }` option (see Drizzle `index.ts` below) |
+
+The Drizzle sqlite `src/db/index.ts` template passes `{ uri: true }` to `better-sqlite3` to handle the `file:` prefix:
+
+```typescript
+import 'dotenv/config';
+import { drizzle } from 'drizzle-orm/better-sqlite3';
+import Database from 'better-sqlite3';
+
+const db = drizzle(new Database(process.env.DATABASE_URL!, { uri: true }));
+
+export { db };
+```
 
 The values come from `ctx.DBConfigs[primaryDBID]` — the same data already used to generate the prefixed vars. The `GenerateEnv` signature does not change; it already receives the full `WeldContext` including `ORMID`.
 
@@ -300,6 +311,8 @@ New file `internal/wiring/orm.go` with two exported functions:
 func GeneratePrismaSchema(provider string) (string, error)
 
 // GenerateDrizzleConfig returns (drizzle.config.ts content, src/db/index.ts content, error).
+// For dialect == "sqlite", importPath is ignored — the sqlite index.ts template is hardcoded.
+// Callers should pass importPath = "" for sqlite.
 func GenerateDrizzleConfig(dialect, importPath string) (string, string, error)
 ```
 
