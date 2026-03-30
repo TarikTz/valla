@@ -21,6 +21,7 @@ const (
 	phaseBackendRuntime
 	phaseBackendFramework
 	phaseDatabaseSelect
+	phaseORMSelect
 	phaseEnvMode
 	phasePortOverrides
 	phaseConfirm
@@ -202,6 +203,15 @@ func (m Model) handleStepDone(msg steps.StepDone) (tea.Model, tea.Cmd) {
 			}
 			m.ctx.DBConfigs[id] = cfg
 		}
+		if isORMEligible(m) {
+			m.phase = phaseORMSelect
+			m.current = steps.NewRuntimeSelect("Select ORM (optional):", ormOptions())
+		} else {
+			m.phase = phaseEnvMode
+			m.current = steps.NewEnvMode()
+		}
+	case phaseORMSelect:
+		m.ctx.ORMID = ormIDFromName(msg.Value.(string))
 		m.phase = phaseEnvMode
 		m.current = steps.NewEnvMode()
 	case phaseEnvMode:
@@ -405,6 +415,13 @@ func (m Model) summaryLines() []string {
 	} else {
 		lines = append(lines, "Database:   none")
 	}
+	ormLabel := "none"
+	if m.ctx.ORMID == "prisma" {
+		ormLabel = "Prisma"
+	} else if m.ctx.ORMID == "drizzle" {
+		ormLabel = "Drizzle"
+	}
+	lines = append(lines, fmt.Sprintf("ORM:        %s", ormLabel))
 	return lines
 }
 
@@ -436,4 +453,60 @@ func wordpressDBName(projectName string) string {
 		return "wordpress"
 	}
 	return name
+}
+
+// isORMEligible reports whether the ORM selection step should be shown.
+// Rules: at least one SQL DB selected, AND a Node runtime is present
+// (Node backend for full-stack/backend-only; server-side frontend for frontend-only).
+func isORMEligible(m Model) bool {
+	sqlDBs := map[string]bool{"postgres": true, "mysql": true, "mariadb": true, "sqlite": true}
+	hasSQL := false
+	for _, id := range m.ctx.DatabaseIDs {
+		if sqlDBs[id] {
+			hasSQL = true
+			break
+		}
+	}
+	if !hasSQL {
+		return false
+	}
+	if m.ctx.BackendID != "" {
+		for _, e := range m.entries {
+			if e.ID == m.ctx.BackendID && e.Runtime == "node" {
+				return true
+			}
+		}
+		return false
+	}
+	// frontend-only: requires a server-side capable framework
+	if m.ctx.FrontendID != "" {
+		for _, e := range m.entries {
+			if e.ID == m.ctx.FrontendID && e.ServerSide {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// ormOptions returns the options for the ORM selection step.
+// "None" is first and is the default cursor position (ORM is opt-in).
+func ormOptions() []steps.RuntimeOption {
+	return []steps.RuntimeOption{
+		{Name: "None", Available: true},
+		{Name: "Prisma", Available: true},
+		{Name: "Drizzle", Available: true},
+	}
+}
+
+// ormIDFromName maps the display name to a registry-style ID.
+func ormIDFromName(name string) string {
+	switch name {
+	case "Prisma":
+		return "prisma"
+	case "Drizzle":
+		return "drizzle"
+	default:
+		return ""
+	}
 }

@@ -20,6 +20,29 @@ func dbNameVarSuffix(id string) string {
 	}
 }
 
+// sqlDatabases is the set of SQL database registry IDs eligible for DATABASE_URL.
+var sqlDatabases = map[string]bool{
+	"postgres": true,
+	"mysql":    true,
+	"mariadb":  true,
+	"sqlite":   true,
+}
+
+// composeDatabaseURL returns a DATABASE_URL connection string for the given DB ID and config.
+// Returns "" for non-SQL databases (redis, mongodb).
+func composeDatabaseURL(id string, cfg registry.DBConfig) string {
+	switch id {
+	case "postgres":
+		return fmt.Sprintf("postgresql://%s:%s@%s:%d/%s", cfg.User, cfg.Password, cfg.Host, cfg.Port, cfg.Name)
+	case "mysql", "mariadb":
+		return fmt.Sprintf("mysql://%s:%s@%s:%d/%s", cfg.User, cfg.Password, cfg.Host, cfg.Port, cfg.Name)
+	case "sqlite":
+		return "file:" + cfg.Path
+	default:
+		return ""
+	}
+}
+
 // GenerateEnv produces the content of the .env file.
 func GenerateEnv(ctx registry.WeldContext) string {
 	var builder strings.Builder
@@ -45,6 +68,17 @@ func GenerateEnv(ctx registry.WeldContext) string {
 		}
 		if suffix := dbNameVarSuffix(id); suffix != "" {
 			fmt.Fprintf(&builder, "%s%s=%s\n", p, suffix, cfg.Name)
+		}
+	}
+	// Emit DATABASE_URL for the primary SQL database when an ORM is selected.
+	if ctx.ORMID != "" {
+		for _, id := range ctx.DatabaseIDs {
+			if sqlDatabases[id] {
+				if url := composeDatabaseURL(id, ctx.DBConfigs[id]); url != "" {
+					fmt.Fprintf(&builder, "DATABASE_URL=%s\n", url)
+				}
+				break // only the first SQL DB gets DATABASE_URL
+			}
 		}
 	}
 	if ctx.BackendID != "" {
