@@ -21,7 +21,7 @@ bin/
 dist/
 tmp/
 temp/
-docs/
+docs/*
 
 # Local environment files
 .env
