@@ -26,11 +26,11 @@ jobs:
       - name: Build binaries
         run: |
           mkdir dist
-          GOOS=darwin  GOARCH=arm64 go build -o dist/valla-cli_darwin_arm64     ./cmd/valla
-          GOOS=darwin  GOARCH=amd64 go build -o dist/valla-cli_darwin_amd64     ./cmd/valla
-          GOOS=linux   GOARCH=arm64 go build -o dist/valla-cli_linux_arm64      ./cmd/valla
-          GOOS=linux   GOARCH=amd64 go build -o dist/valla-cli_linux_amd64      ./cmd/valla
-          GOOS=windows GOARCH=amd64 go build -o dist/valla-cli_windows_amd64.exe ./cmd/valla
+          GOOS=darwin  GOARCH=arm64 go build -ldflags "-X main.version=${{ github.ref_name }}" -o dist/valla-cli_darwin_arm64     ./cmd/valla
+          GOOS=darwin  GOARCH=amd64 go build -ldflags "-X main.version=${{ github.ref_name }}" -o dist/valla-cli_darwin_amd64     ./cmd/valla
+          GOOS=linux   GOARCH=arm64 go build -ldflags "-X main.version=${{ github.ref_name }}" -o dist/valla-cli_linux_arm64      ./cmd/valla
+          GOOS=linux   GOARCH=amd64 go build -ldflags "-X main.version=${{ github.ref_name }}" -o dist/valla-cli_linux_amd64      ./cmd/valla
+          GOOS=windows GOARCH=amd64 go build -ldflags "-X main.version=${{ github.ref_name }}" -o dist/valla-cli_windows_amd64.exe ./cmd/valla
 
       - name: Release
         uses: softprops/action-gh-release@v2
