@@ -4,7 +4,7 @@ type: backend
 runtime: node
 group: Node.js
 requires_runtime: node
-scaffold_cmd: "npx --yes @nestjs/cli new {{.ScaffoldName}} --package-manager npm --skip-git"
+scaffold_cmd: "npx --yes @nestjs/cli new {{.ScaffoldName}} --package-manager npm --skip-git --skip-install"
 default_port: 3000
 env_vars:
   - PORT

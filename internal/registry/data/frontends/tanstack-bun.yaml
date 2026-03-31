@@ -4,7 +4,7 @@ type: frontend
 runtime: bun
 group: TanStack Start
 requires_runtime: bun
-scaffold_cmd: "bunx --bun @tanstack/cli@latest create {{.ScaffoldName}} --framework react --no-git"
+scaffold_cmd: "bunx --bun @tanstack/cli@latest create {{.ScaffoldName}} --framework react --no-git --no-install"
 default_port: 3000
 server_side: true
 http_client_patch:

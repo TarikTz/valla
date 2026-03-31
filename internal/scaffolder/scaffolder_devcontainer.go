@@ -276,6 +276,19 @@ func GenerateDevContainerFiles(ctx registry.WeldContext, backendEntry, frontendE
 		rollback()
 		return fmt.Errorf("write Makefile: %w", err)
 	}
+	written = append(written, makefilePath)
+
+	// 4. .gitignore
+	gitignoreBytes, err := registry.ReadEmbeddedFile("internal/registry/data/templates/devcontainer/gitignore.tmpl")
+	if err != nil {
+		rollback()
+		return fmt.Errorf("read .gitignore template: %w", err)
+	}
+	gitignorePath := filepath.Join(projectRoot, ".gitignore")
+	if err := WriteFile(gitignorePath, gitignoreBytes); err != nil {
+		rollback()
+		return fmt.Errorf("write .gitignore: %w", err)
+	}
 
 	return nil
 }

@@ -150,6 +150,9 @@ Environment:
 			fmt.Fprintf(os.Stderr, "Frontend scaffolding failed: %v\n", err)
 			os.Exit(1)
 		}
+		if ctx.DevContainer {
+			removeHostDeps(filepath.Join(projectRoot, frontendDir), frontendEntry.Runtime)
+		}
 	}
 
 	var backendEntry registry.Entry
@@ -160,6 +163,9 @@ Environment:
 			doRollback()
 			fmt.Fprintf(os.Stderr, "Backend scaffolding failed: %v\n", err)
 			os.Exit(1)
+		}
+		if ctx.DevContainer {
+			removeHostDeps(filepath.Join(projectRoot, backendDir), backendEntry.Runtime)
 		}
 	}
 
@@ -285,6 +291,11 @@ Environment:
 	}
 
 	if ctx.DevContainer {
+		if ctx.FrontendID == "" || ctx.BackendID == "" {
+			doRollback()
+			fmt.Fprintf(os.Stderr, "Fully Dockerized mode requires both a frontend and a backend\n")
+			os.Exit(1)
+		}
 		feEntryDC, _ := registry.FindByID(entries, ctx.FrontendID)
 		beEntryDC, _ := registry.FindByID(entries, ctx.BackendID)
 		if err := scaffolder.GenerateDevContainerFiles(ctx, beEntryDC, feEntryDC, projectRoot); err != nil {
@@ -386,6 +397,22 @@ func runScaffold(ctx registry.WeldContext, entry registry.Entry, root, targetDir
 	}
 
 	return scaffolder.RenameDir(filepath.Join(root, tempName), filepath.Join(root, targetDir))
+}
+
+// removeHostDeps deletes dependency directories that were created on the host
+// during scaffolding. In Fully Dockerized mode these dirs must only exist
+// inside the named Docker volumes, not on the host disk.
+func removeHostDeps(serviceDir, runtime string) {
+	var dirs []string
+	switch runtime {
+	case "node", "bun":
+		dirs = []string{"node_modules"}
+	case "python3":
+		dirs = []string{"venv", ".venv"}
+	}
+	for _, d := range dirs {
+		_ = os.RemoveAll(filepath.Join(serviceDir, d))
+	}
 }
 
 func trimTemplateSuffix(path string) string {

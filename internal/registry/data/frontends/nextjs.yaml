@@ -4,7 +4,7 @@ type: frontend
 runtime: node
 group: Next.js
 requires_runtime: node
-scaffold_cmd: "npm create next-app@latest {{.ScaffoldName}} -- --typescript --tailwind --eslint --app --src-dir --import-alias \"@/*\" --no-git"
+scaffold_cmd: "npm create next-app@latest {{.ScaffoldName}} -- --typescript --tailwind --eslint --app --src-dir --import-alias \"@/*\" --no-git --no-install"
 default_port: 3000
 server_side: true
 http_client_patch:
