@@ -235,3 +235,38 @@ func TestLoad_ServerSideFrontends(t *testing.T) {
 		}
 	}
 }
+
+func TestJavaEntries_HaveDevCmd(t *testing.T) {
+	entries, err := registry.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	javaIDs := []string{
+		"java-springboot-maven",
+		"java-springboot-gradle",
+		"java-quarkus-maven",
+		"java-quarkus-gradle",
+	}
+	for _, id := range javaIDs {
+		entry, ok := registry.FindByID(entries, id)
+		if !ok {
+			t.Errorf("entry %q not found in registry", id)
+			continue
+		}
+		if entry.DevCmd == "" {
+			t.Errorf("entry %q must have dev_cmd set explicitly", id)
+		}
+	}
+}
+
+func TestReadEmbeddedFile_DevcontainerTemplates(t *testing.T) {
+	for _, path := range []string{
+		"internal/registry/data/templates/devcontainer/devcontainer.json.tmpl",
+		"internal/registry/data/templates/devcontainer/Makefile.tmpl",
+	} {
+		_, err := registry.ReadEmbeddedFile(path)
+		if err != nil {
+			t.Errorf("ReadEmbeddedFile(%q) error: %v", path, err)
+		}
+	}
+}

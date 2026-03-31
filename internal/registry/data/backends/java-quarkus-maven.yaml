@@ -6,6 +6,7 @@ group: Java
 requires_runtime: java
 scaffold_cmd: "mvn io.quarkus:quarkus-maven-plugin:3.8.1:create -DprojectGroupId=com.example -DprojectArtifactId={{.JavaArtifactID}} -Dextensions=resteasy-reactive -DbuildTool=maven -DnoCode=false -B && mv {{.JavaArtifactID}} {{.ScaffoldName}}"
 default_port: 8080
+dev_cmd: "./mvnw quarkus:dev"
 env_vars:
   - PORT
   - DB_HOST
