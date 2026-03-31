@@ -24,6 +24,30 @@
 
 Stop wiring up frontend, backend, database, and Docker by hand. Valla scaffolds your entire stack in one terminal flow — pick your frameworks, hit Enter, and get a production-ready project structure with environment config and Docker Compose included.
 
+## Fully Dockerized Dev Environment
+
+Valla's standout feature is the **Fully Dockerized** output mode. Instead of installing project dependencies (`node_modules`, Python virtual envs) directly on your machine, everything runs inside a Docker dev container. Your source code is the only thing on your host disk — packages never leave the container.
+
+This matters for supply chain security. When a compromised package runs a malicious `postinstall` script, it executes inside the container and cannot reach your SSH keys, home directory, or system files. The blast radius is contained.
+
+**What gets generated:**
+
+```text
+my-app/
+├── frontend/
+├── backend/
+├── .devcontainer/
+│   └── devcontainer.json   ← open in VS Code to enter the container
+├── docker-compose.dev.yml  ← named volumes shadow node_modules / .venv
+├── docker-compose.yml
+├── Makefile
+└── .env
+```
+
+Open the project folder in VS Code and click **Reopen in Container** — your entire dev environment starts inside Docker. Ports are forwarded automatically. The relevant language extension is pre-installed inside the container.
+
+> **Requires Docker** — the option is only shown when Docker is detected on your machine.
+
 ## Quickstart
 
 ```bash
@@ -96,8 +120,11 @@ Shown when at least one SQL database is selected and the project uses a Node.js 
 
 ### Output Modes
 
+- **Fully Dockerized** — dev environment runs entirely inside Docker; packages never touch your host machine
 - Monorepo
 - Separate folders
+- Frontend only
+- Backend only
 - WordPress
 
 ## Supported Platforms
@@ -142,6 +169,28 @@ cd frontend && npm install && npm run dev
 # Backend — command depends on your selected stack
 ```
 
+### Fully Dockerized workflow
+
+Requires [VS Code](https://code.visualstudio.com/) with the [Dev Containers extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers).
+
+```bash
+npx valla-cli          # choose "Fully Dockerized" in the output structure step
+cd my-app
+code .                 # VS Code prompts "Reopen in Container" — click it
+```
+
+Inside the container, install dependencies and start your dev server:
+
+```bash
+# Node / Bun backend or frontend
+npm install && npm run dev
+
+# Python backend
+pip install -r requirements.txt && uvicorn main:app --reload --host 0.0.0.0
+```
+
+All packages are installed inside the container. Your host machine only ever sees the source files.
+
 ### Docker workflow
 
 ```bash
@@ -162,6 +211,20 @@ docker-compose up -d
 Then open `http://localhost:<wordpress-port>` and complete the WordPress setup in the browser.
 
 ## Generated Project Shapes
+
+### Fully Dockerized
+
+```text
+my-app/
+    frontend/
+    backend/
+    .devcontainer/
+        devcontainer.json
+    .env
+    docker-compose.yml
+    docker-compose.dev.yml
+    Makefile
+```
 
 ### Monorepo
 
@@ -214,7 +277,7 @@ my-wordpress-project/
 Install only what your selected stack needs:
 
 - **Node.js** — required for frontend scaffolds and Node-based backends
-- **Docker Desktop or Docker Engine** — required for Docker mode
+- **Docker Desktop or Docker Engine** — required for Docker mode and Fully Dockerized dev environments
 - **Internet access** — required for framework scaffolders and WordPress downloads
 - **Go** — required only when running or building from source
 

@@ -26,8 +26,9 @@ type WeldContext struct {
 	BackendPort    int
 	DBName         string // default schema/database name for all SQL DBs (derived from ProjectName)
 	ORMID          string // "prisma", "drizzle", or "" for none
-	OutputMode     string // "monorepo", "separate", or "wordpress"
+	OutputMode     string // "monorepo", "separate", "wordpress", or "devcontainer"
 	EnvMode        string // "local" or "docker"
+	DevContainer   bool   // true when "Fully Dockerized" output structure is chosen
 }
 
 // DockerConfig describes how a service is containerized.
@@ -78,4 +79,6 @@ type Entry struct {
 	HTTPClientPatch   *HTTPClientPatch   `yaml:"http_client_patch"`
 	PostScaffoldFiles []PostScaffoldFile `yaml:"post_scaffold_files"`
 	Docker            *DockerConfig      `yaml:"docker"`
+	DevContainerImage string             `yaml:"devcontainer_image"` // overrides runtime-derived devcontainer image
+	DevCmd            string             `yaml:"dev_cmd"`             // hot-reload command inside the dev container
 }

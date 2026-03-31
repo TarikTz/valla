@@ -36,8 +36,12 @@ type Model struct {
 	ctx     registry.WeldContext
 	entries []registry.Entry
 
-	feRuntimeOpts []steps.RuntimeOption
-	beRuntimeOpts []steps.RuntimeOption
+	feRuntimeOpts    []steps.RuntimeOption
+	beRuntimeOpts    []steps.RuntimeOption
+	allFeRuntimeOpts []steps.RuntimeOption // all Available: true — used on DevContainer path
+	allBeRuntimeOpts []steps.RuntimeOption // all Available: true — used on DevContainer path
+
+	dockerAvailable bool
 
 	selectedFERuntime string
 	selectedBERuntime string
@@ -48,13 +52,16 @@ type Model struct {
 
 // New creates the root model. feRuntimeOpts and beRuntimeOpts include all known runtimes,
 // with Available=false for those not detected on the user's machine.
-func New(entries []registry.Entry, feRuntimeOpts, beRuntimeOpts []steps.RuntimeOption) Model {
+func New(entries []registry.Entry, feRuntimeOpts, beRuntimeOpts []steps.RuntimeOption, dockerAvailable bool) Model {
 	return Model{
-		phase:         phaseProjectName,
-		current:       steps.NewProjectName(),
-		entries:       entries,
-		feRuntimeOpts: feRuntimeOpts,
-		beRuntimeOpts: beRuntimeOpts,
+		phase:            phaseProjectName,
+		current:          steps.NewProjectName(),
+		entries:          entries,
+		feRuntimeOpts:    feRuntimeOpts,
+		beRuntimeOpts:    beRuntimeOpts,
+		allFeRuntimeOpts: steps.AllRuntimeOptions(feRuntimeOpts),
+		allBeRuntimeOpts: steps.AllRuntimeOptions(beRuntimeOpts),
+		dockerAvailable:  dockerAvailable,
 	}
 }
 
@@ -98,9 +105,23 @@ func (m Model) handleStepDone(msg steps.StepDone) (tea.Model, tea.Cmd) {
 		m.ctx.ProjectName = msg.Value.(string)
 		m.ctx.DBName = m.ctx.ProjectName
 		m.phase = phaseOutputStructure
-		m.current = steps.NewOutputStructure()
+		m.current = steps.NewOutputStructure(m.dockerAvailable)
 	case phaseOutputStructure:
 		choice := msg.Value.(string)
+		if choice == "Fully Dockerized" {
+			m.ctx.OutputMode = "devcontainer"
+			m.ctx.DevContainer = true
+			m.ctx.EnvMode = "docker"
+			for id, cfg := range m.ctx.DBConfigs {
+				cfg.Host = "db"
+				m.ctx.DBConfigs[id] = cfg
+			}
+			m.feRuntimeOpts = m.allFeRuntimeOpts
+			m.beRuntimeOpts = m.allBeRuntimeOpts
+			m.phase = phaseFrontendRuntime
+			m.current = steps.NewRuntimeSelect("Select frontend runtime:", m.feRuntimeOpts)
+			return m, m.current.Init()
+		}
 		if choice == "WordPress" {
 			m.ctx.OutputMode = "wordpress"
 			m.ctx.EnvMode = "docker"
@@ -212,14 +233,22 @@ func (m Model) handleStepDone(msg steps.StepDone) (tea.Model, tea.Cmd) {
 		if isORMEligible(m) {
 			m.phase = phaseORMSelect
 			m.current = steps.NewRuntimeSelect("Select ORM (optional):", ormOptions())
+		} else if m.ctx.DevContainer {
+			m.phase = phasePortOverrides
+			m.current = m.buildPortOverrides()
 		} else {
 			m.phase = phaseEnvMode
 			m.current = steps.NewEnvMode()
 		}
 	case phaseORMSelect:
 		m.ctx.ORMID = ormIDFromName(msg.Value.(string))
-		m.phase = phaseEnvMode
-		m.current = steps.NewEnvMode()
+		if m.ctx.DevContainer {
+			m.phase = phasePortOverrides
+			m.current = m.buildPortOverrides()
+		} else {
+			m.phase = phaseEnvMode
+			m.current = steps.NewEnvMode()
+		}
 	case phaseEnvMode:
 		choice := msg.Value.(string)
 		var host string
@@ -394,8 +423,12 @@ func (m Model) summaryLines() []string {
 	lines := []string{
 		fmt.Sprintf("Project:    %s", m.ctx.ProjectName),
 		fmt.Sprintf("Structure:  %s", m.ctx.OutputMode),
-		fmt.Sprintf("Env mode:   %s", m.ctx.EnvMode),
 	}
+	envModeLine := fmt.Sprintf("Env mode:   %s", m.ctx.EnvMode)
+	if m.ctx.DevContainer {
+		envModeLine = "Mode:       Fully Dockerized (Dev Container)"
+	}
+	lines = append(lines, envModeLine)
 	if m.ctx.FrontendID != "" {
 		lines = append(lines, fmt.Sprintf("FE port:    %d", m.ctx.FrontendPort))
 	}
