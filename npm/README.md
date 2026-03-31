@@ -6,6 +6,8 @@ Stop assembling stacks by hand. `valla-cli` scaffolds frontend, backend, databas
 
 Open source — contributions welcome at [github.com/tariktz/valla](https://github.com/tariktz/valla).
 
+![valla demo](demo.gif)
+
 ## Usage
 
 ```bash
