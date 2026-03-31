@@ -28,6 +28,18 @@ func runtimeOptionsAll(names []string) []RuntimeOption {
 	return opts
 }
 
+// AllRuntimeOptions returns a copy of opts with every entry marked Available: true.
+// The input slice must be the full set of known runtimes (not a pre-filtered subset).
+// Does not mutate the input.
+func AllRuntimeOptions(opts []RuntimeOption) []RuntimeOption {
+	out := make([]RuntimeOption, len(opts))
+	for i, o := range opts {
+		o.Available = true
+		out[i] = o
+	}
+	return out
+}
+
 func NewRuntimeSelect(prompt string, options []RuntimeOption) RuntimeSelect {
 	// Initialise cursor on the first available option.
 	cursor := 0

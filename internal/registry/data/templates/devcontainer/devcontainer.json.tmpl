@@ -1,0 +1,15 @@
+{
+  "name": "{{.Ctx.ProjectName}}",
+  "dockerComposeFile": "../docker-compose.dev.yml",
+  "service": "backend",
+  "workspaceFolder": "/app",
+  "forwardPorts": [{{.Ctx.FrontendPort}}, {{.Ctx.BackendPort}}],
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "{{.BackendExtension}}",
+        "ms-azuretools.vscode-docker"
+      ]
+    }
+  }
+}

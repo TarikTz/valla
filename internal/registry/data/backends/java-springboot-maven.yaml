@@ -6,6 +6,7 @@ group: Java
 requires_runtime: java
 scaffold_cmd: "curl -f https://start.spring.io/starter.tgz -d type=maven-project -d language=java -d artifactId={{.JavaArtifactID}} -d name={{.ProjectName}}-backend -d dependencies=web | tar -xzvf - -C . && mv {{.JavaArtifactID}} {{.ScaffoldName}}"
 default_port: 8080
+dev_cmd: "./mvnw spring-boot:run"
 env_vars:
   - PORT
   - DB_HOST

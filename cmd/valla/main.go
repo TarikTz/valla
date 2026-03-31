@@ -57,7 +57,8 @@ Environment:
 		os.Exit(1)
 	}
 
-	available := detector.Detect([]string{"go", "node", "bun", "python3", "dotnet"})
+	available := detector.Detect([]string{"go", "node", "bun", "python3", "dotnet", "docker"})
+	dockerAvailable := available["docker"]
 	// "java" is not a binary name so it cannot be in the Detect call above.
 	// DetectWithAliases maps mvn/gradle presence to the logical "java" key.
 	// This merge is safe because "java" is guaranteed absent from available above.
@@ -79,7 +80,7 @@ Environment:
 		{Name: "java", Available: available["java"], Reason: "mvn or gradle not found"},
 	}
 
-	model := itui.New(entries, feRuntimeOpts, beRuntimeOpts)
+	model := itui.New(entries, feRuntimeOpts, beRuntimeOpts, dockerAvailable)
 	program := tea.NewProgram(model)
 	startUpdateChecker(program, version)
 	finalModel, err := program.Run()
@@ -282,6 +283,17 @@ Environment:
 	if ctx.ORMID != "" {
 		ormInstr = ormInstallInstructions(ctx.ORMID, primarySQLDB(ctx.DatabaseIDs))
 	}
+
+	if ctx.DevContainer {
+		feEntryDC, _ := registry.FindByID(entries, ctx.FrontendID)
+		beEntryDC, _ := registry.FindByID(entries, ctx.BackendID)
+		if err := scaffolder.GenerateDevContainerFiles(ctx, beEntryDC, feEntryDC, projectRoot); err != nil {
+			doRollback()
+			fmt.Fprintf(os.Stderr, "Failed to generate dev container files: %v\n", err)
+			os.Exit(1)
+		}
+	}
+
 	fmt.Print(renderSuccessOutput(ctx, frontendDir, backendDir, frontendEntry, backendEntry, ormInstr))
 }
 
@@ -596,6 +608,33 @@ func renderSummaryCard(ctx registry.WeldContext, entries []registry.Entry) strin
 			itui.StyleCardLabel.Render("WordPress")+" "+itui.StyleCardValue.Render(fmt.Sprintf("port %d", ctx.FrontendPort)),
 			itui.StyleCardLabel.Render("MySQL")+" "+itui.StyleCardValue.Render(fmt.Sprintf("port %d", mysqlCfg.Port)),
 		)
+	} else if ctx.DevContainer {
+		rows = append(rows, itui.StyleCardLabel.Render("Mode")+" "+itui.StyleCardValue.Render("Dev Container (Docker)"))
+		if ctx.FrontendID != "" {
+			feEntry, _ := registry.FindByID(entries, ctx.FrontendID)
+			rows = append(rows, itui.StyleCardLabel.Render("Frontend")+" "+itui.StyleCardValue.Render(feEntry.Name+" ("+feEntry.Runtime+")"))
+		}
+		if ctx.BackendID != "" {
+			beEntry, _ := registry.FindByID(entries, ctx.BackendID)
+			rows = append(rows, itui.StyleCardLabel.Render("Backend")+" "+itui.StyleCardValue.Render(beEntry.Name+" ("+beEntry.Runtime+")"))
+		}
+		if len(ctx.DatabaseIDs) > 0 {
+			var dbNames []string
+			for _, id := range ctx.DatabaseIDs {
+				e, _ := registry.FindByID(entries, id)
+				dbNames = append(dbNames, e.Name)
+			}
+			rows = append(rows, itui.StyleCardLabel.Render("Database")+" "+itui.StyleCardValue.Render(strings.Join(dbNames, " + ")))
+		}
+		if len(ctx.DatabaseIDs) > 0 {
+			ormLabel := "None"
+			if ctx.ORMID == "prisma" {
+				ormLabel = "Prisma"
+			} else if ctx.ORMID == "drizzle" {
+				ormLabel = "Drizzle"
+			}
+			rows = append(rows, itui.StyleCardLabel.Render("ORM")+" "+itui.StyleCardValue.Render(ormLabel))
+		}
 	} else {
 		modeVal := capitalize(ctx.OutputMode) + " · " + capitalize(ctx.EnvMode)
 		rows = append(rows, itui.StyleCardLabel.Render("Mode")+" "+itui.StyleCardValue.Render(modeVal))
@@ -649,7 +688,20 @@ func renderSuccessOutput(ctx registry.WeldContext, frontendDir, backendDir strin
 	sb.WriteString("\n\n")
 
 	// Directory tree
-	if ctx.OutputMode == "wordpress" {
+	if ctx.DevContainer {
+		children := []string{
+			"  frontend/",
+			"  backend/",
+			"  .devcontainer/",
+			"    devcontainer.json",
+			"  .env",
+			"  docker-compose.yml",
+			"  docker-compose.dev.yml",
+			"  Makefile",
+		}
+		tree := ctx.ProjectName + "/\n" + strings.Join(children, "\n")
+		sb.WriteString(itui.StyleSuccessTree.Render(tree))
+	} else if ctx.OutputMode == "wordpress" {
 		tree := fmt.Sprintf("%s/\n  wordpress/\n  .env\n  docker-compose.yml", ctx.ProjectName)
 		sb.WriteString(itui.StyleSuccessTree.Render(tree))
 	} else if ctx.OutputMode == "separate" {
@@ -678,7 +730,12 @@ func renderSuccessOutput(ctx registry.WeldContext, frontendDir, backendDir strin
 
 	// Next steps
 	sb.WriteString("Next steps:\n\n")
-	if ctx.OutputMode == "wordpress" {
+	if ctx.DevContainer {
+		sb.WriteString(itui.StyleSuccessCmd.Render(fmt.Sprintf("  cd %s && make dev", ctx.ProjectName)))
+		sb.WriteString("\n\nOr open in VS Code and select ")
+		sb.WriteString(itui.StyleSuccessCmd.Render(`"Reopen in Container"`))
+		sb.WriteString(" to use the Dev Container.\n")
+	} else if ctx.OutputMode == "wordpress" {
 		sb.WriteString(itui.StyleSuccessCmd.Render(fmt.Sprintf("  cd %s && docker-compose up -d", ctx.ProjectName)))
 		sb.WriteString(fmt.Sprintf("\n\nThen open http://localhost:%d to finish WordPress setup.", ctx.FrontendPort))
 	} else if ctx.EnvMode == "docker" {

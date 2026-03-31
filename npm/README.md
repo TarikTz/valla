@@ -2,6 +2,8 @@
 
 Stop assembling stacks by hand. `valla-cli` scaffolds frontend, backend, database, and Docker wiring in a single interactive flow — from zero to a running project in minutes.
 
+**Fully Dockerized dev environments included** — choose the Fully Dockerized output mode and all your dependencies (`node_modules`, virtual envs) live inside Docker. Your host machine only ever sees source files. When a compromised package runs a malicious install script, it's contained to the container and can't touch your SSH keys or system files.
+
 Open source — contributions welcome at [github.com/tariktz/valla](https://github.com/tariktz/valla).
 
 ## Usage
@@ -24,12 +26,13 @@ On first run, the correct pre-built binary for your platform is downloaded and c
 
 ## What It Does
 
+- **Fully Dockerized mode** — dependencies install inside Docker, never on your host machine; protects against supply chain attacks
 - Scaffolds frontend and backend together in a single interactive terminal flow
 - Generates `.env` for local development
 - Generates `docker-compose.yml` for containerized development
 - Wires frontend API defaults to the selected backend port automatically
 - Injects backend CORS configuration for supported backends
-- Supports monorepo and separate-folder output modes
+- Supports monorepo, separate-folder, frontend-only, and backend-only output modes
 - Includes a dedicated WordPress mode with Docker services and a starter theme
 - Supports multiple databases simultaneously (e.g. PostgreSQL + Redis)
 - Optionally generates ORM configuration files (Prisma or Drizzle) for eligible stacks
@@ -39,7 +42,7 @@ On first run, the correct pre-built binary for your platform is downloaded and c
 The CLI walks through a short set of prompts:
 
 1. Project name
-2. Output structure (monorepo, separate folders, or WordPress)
+2. Output structure (Fully Dockerized, monorepo, separate folders, WordPress, and more)
 3. Frontend runtime and framework
 4. Backend runtime and framework
 5. Database (multi-select — combine PostgreSQL, MySQL, MariaDB, MongoDB, Redis, or pick SQLite/None)
@@ -60,9 +63,22 @@ For WordPress, the CLI downloads the latest WordPress source, prepares Docker se
 
 **ORM _(optional)_:** Prisma or Drizzle — available when a SQL database is selected with a Node.js runtime or server-side frontend framework
 
-**Output modes:** Monorepo, Separate folders, WordPress
+**Output modes:** Fully Dockerized, Monorepo, Separate folders, Frontend only, Backend only, WordPress
 
 ## Generated Project Shapes
+
+**Fully Dockerized:**
+```
+my-app/
+├── frontend/
+├── backend/
+├── .devcontainer/
+│   └── devcontainer.json
+├── docker-compose.dev.yml
+├── docker-compose.yml
+├── Makefile
+└── .env
+```
 
 **Monorepo:**
 ```
