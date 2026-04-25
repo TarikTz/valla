@@ -9,6 +9,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"errors"
+	"fmt"
 	"math/big"
 	"os"
 	"path/filepath"
@@ -50,6 +51,14 @@ func LoadOrCreateCA() (*CA, bool, error) {
 	certPEM, certErr := os.ReadFile(certPath)
 	keyPEM, keyErr := os.ReadFile(keyPath)
 	if certErr == nil && keyErr == nil {
+		// Reject key files with permissions wider than 0600 — anyone who can
+		// read ca-key.pem can sign arbitrary trusted certificates.
+		if info, err := os.Stat(keyPath); err == nil && info.Mode().Perm()&0o077 != 0 {
+			return nil, false, fmt.Errorf(
+				"CA key %s has unsafe permissions %v; run: chmod 600 %s",
+				keyPath, info.Mode().Perm(), keyPath,
+			)
+		}
 		ca, err := parseCAPEM(certPEM, keyPEM)
 		if err == nil {
 			return ca, false, nil
@@ -65,10 +74,26 @@ func LoadOrCreateCA() (*CA, bool, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, false, err
 	}
-	if err := os.WriteFile(certPath, ca.CertPEM, 0o644); err != nil {
+
+	// Write both files to temporaries first, then rename atomically so that a
+	// crash or disk-full between the two writes can never leave a cert on disk
+	// without its matching key (which would silently invalidate the trust store).
+	certTmp := certPath + ".tmp"
+	keyTmp := keyPath + ".tmp"
+	if err := os.WriteFile(certTmp, ca.CertPEM, 0o644); err != nil {
 		return nil, false, err
 	}
-	if err := os.WriteFile(keyPath, ca.KeyPEM, 0o600); err != nil {
+	if err := os.WriteFile(keyTmp, ca.KeyPEM, 0o600); err != nil {
+		_ = os.Remove(certTmp)
+		return nil, false, err
+	}
+	if err := os.Rename(certTmp, certPath); err != nil {
+		_ = os.Remove(certTmp)
+		_ = os.Remove(keyTmp)
+		return nil, false, err
+	}
+	if err := os.Rename(keyTmp, keyPath); err != nil {
+		_ = os.Remove(keyTmp)
 		return nil, false, err
 	}
 	return ca, true, nil

@@ -4,9 +4,19 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"regexp"
 
 	"gopkg.in/yaml.v3"
 )
+
+// validLabel enforces a single DNS label (no dots) — used for project name
+// and service subdomains which must be single labels.
+var validLabel = regexp.MustCompile(`^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?$`)
+
+// validDomain accepts a full domain like "test" or "lvh.me" (dot-separated
+// labels). The domain field is only used for hostname construction and cert
+// SANs, never for dnsmasq config or filesystem paths.
+var validDomain = regexp.MustCompile(`^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$`)
 
 // Service represents one proxied upstream in valla.yaml.
 type Service struct {
@@ -47,6 +57,12 @@ func validate(cfg *Config) error {
 	if cfg.Project == "" {
 		return errors.New("project field is required")
 	}
+	if !validLabel.MatchString(cfg.Project) {
+		return fmt.Errorf("project %q contains invalid characters (letters, digits, hyphens only)", cfg.Project)
+	}
+	if cfg.Domain != "" && !validDomain.MatchString(cfg.Domain) {
+		return fmt.Errorf("domain %q is not a valid domain name (e.g. test, lvh.me)", cfg.Domain)
+	}
 	if len(cfg.Services) == 0 {
 		return errors.New("at least one service is required")
 	}
@@ -59,6 +75,9 @@ func validate(cfg *Config) error {
 		}
 		if svc.Subdomain == "" {
 			return fmt.Errorf("services[%d] (%s): subdomain is required", i, svc.Name)
+		}
+		if !validLabel.MatchString(svc.Subdomain) {
+			return fmt.Errorf("services[%d] (%s): subdomain %q contains invalid characters (letters, digits, hyphens only)", i, svc.Name, svc.Subdomain)
 		}
 	}
 	return nil

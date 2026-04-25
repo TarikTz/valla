@@ -15,7 +15,7 @@ import (
 // CertCache generates and caches leaf TLS certificates signed by a CA.
 type CertCache struct {
 	ca    *CA
-	mu    sync.Mutex
+	mu    sync.RWMutex
 	cache map[string]*tls.Certificate
 }
 
@@ -26,31 +26,78 @@ func NewCertCache(ca *CA) *CertCache {
 
 // GetCertificate is a tls.Config.GetCertificate callback.
 // It returns a cached cert for the SNI hostname, generating one if absent.
+// Uses a read lock for the cache lookup and only acquires a write lock when a
+// new cert must be stored, so concurrent TLS handshakes for already-cached
+// hostnames never block each other.
 func (c *CertCache) GetCertificate(hello *tls.ClientHelloInfo) (*tls.Certificate, error) {
 	host := hello.ServerName
 	if host == "" {
 		host = "localhost"
 	}
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if cert, ok := c.cache[host]; ok {
+
+	// Fast path: cache hit under read lock.
+	c.mu.RLock()
+	cert, ok := c.cache[host]
+	c.mu.RUnlock()
+	if ok {
 		return cert, nil
 	}
+
+	// Slow path: generate outside any lock so concurrent handshakes for
+	// different hostnames don't serialize behind a single write lock.
 	cert, err := c.generate([]string{host})
 	if err != nil {
 		return nil, err
 	}
+
+	// Store under write lock; double-check to avoid overwriting a cert that
+	// another goroutine may have generated and stored between our RUnlock and
+	// now.
+	c.mu.Lock()
+	if existing, ok := c.cache[host]; ok {
+		c.mu.Unlock()
+		return existing, nil
+	}
 	c.cache[host] = cert
+	c.mu.Unlock()
 	return cert, nil
 }
 
-// Generate returns a fresh tls.Certificate for the given SANs signed by the CA.
+// Generate returns a TLS certificate for the given hostnames, keyed by the
+// first hostname. It populates the cache so that subsequent GetCertificate
+// calls for the same hostname return immediately without re-generating.
+// This makes pre-warming in Serve() effective.
 func (c *CertCache) Generate(hosts []string) (*tls.Certificate, error) {
+	if len(hosts) == 0 {
+		return nil, nil
+	}
+	key := hosts[0]
+
+	// Fast path: already cached.
+	c.mu.RLock()
+	cert, ok := c.cache[key]
+	c.mu.RUnlock()
+	if ok {
+		return cert, nil
+	}
+
+	cert, err := c.generate(hosts)
+	if err != nil {
+		return nil, err
+	}
+
 	c.mu.Lock()
-	defer c.mu.Unlock()
-	return c.generate(hosts)
+	if existing, ok := c.cache[key]; ok {
+		c.mu.Unlock()
+		return existing, nil
+	}
+	c.cache[key] = cert
+	c.mu.Unlock()
+	return cert, nil
 }
 
+// generate creates a fresh signed leaf certificate. It is intentionally
+// lock-free so callers can run it outside any mutex.
 func (c *CertCache) generate(hosts []string) (*tls.Certificate, error) {
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {

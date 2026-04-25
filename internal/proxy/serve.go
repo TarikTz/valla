@@ -115,9 +115,17 @@ func Serve(opts ServeOptions) error {
 	}
 
 	srv := &http.Server{
-		Handler:      handler,
-		ReadTimeout:  30 * time.Second,
-		WriteTimeout: 60 * time.Second,
+		Handler:     handler,
+		ReadTimeout: 30 * time.Second,
+		// WriteTimeout is intentionally 0 (no limit) because the proxy must
+		// support long-lived streaming responses: Vite/webpack HMR event
+		// streams, SSE endpoints, and large file downloads would all be
+		// killed after a fixed deadline. Slow-loris attacks are not a concern
+		// for a loopback-bound dev proxy.
+		WriteTimeout: 0,
+		// IdleTimeout bounds keep-alive connections so they don't hold
+		// resources indefinitely when the upstream goes quiet.
+		IdleTimeout: 120 * time.Second,
 	}
 
 	ctx := opts.Context

@@ -21,8 +21,12 @@ bin/
 dist/
 tmp/
 temp/
-docs/*
 vhs/
+docs/
+# Docs build output and dependencies
+documentation/node_modules/
+documentation/.vitepress/dist/
+documentation/.vitepress/cache/
 
 # Local environment files
 .env

@@ -202,9 +202,14 @@ func checkHealth(index, port int) tea.Cmd {
 }
 
 // waitForLog returns a Cmd that blocks until the next RequestEntry is ready.
+// Returns nil when the channel is closed (proxy shutting down), which stops
+// the Bubbletea command loop for logging without leaking a goroutine.
 func waitForLog(ch <-chan RequestEntry) tea.Cmd {
 	return func() tea.Msg {
-		entry := <-ch
+		entry, ok := <-ch
+		if !ok {
+			return nil
+		}
 		return requestLogMsg{Entry: entry}
 	}
 }
@@ -216,7 +221,9 @@ func openBrowser(url string) {
 	case "darwin":
 		cmd = exec.Command("open", url)
 	case "windows":
-		cmd = exec.Command("cmd", "/c", "start", url)
+		// Use rundll32 instead of "cmd /c start" to avoid shell interpretation
+		// of characters like & | ^ that could appear in a crafted subdomain.
+		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
 	default:
 		cmd = exec.Command("xdg-open", url)
 	}

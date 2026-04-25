@@ -28,6 +28,13 @@ func Trust() error {
 	if err := installTrust(certPath); err != nil {
 		return err
 	}
+
+	fmt.Println("\nSetting up local DNS for *.test → 127.0.0.1…")
+	if err := SetupDNS("test"); err != nil {
+		// Non-fatal: print warning and continue.
+		fmt.Fprintf(os.Stderr, "WARNING: DNS setup failed: %v\n", err)
+		fmt.Fprintf(os.Stderr, "You can set it up manually — see the output above.\n")
+	}
 	return nil
 }
 

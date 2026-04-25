@@ -5,9 +5,20 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 )
+
+// validSubdomain rejects unsafe values before they reach cert generation.
+// Single DNS label: letters, digits, hyphens only (no dots).
+var validSubdomain = regexp.MustCompile(`^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?$`)
+
+// validDomain accepts a full domain name like "test" or "lvh.me" — one or
+// more dot-separated DNS labels. Dots are allowed here; slashes and whitespace
+// are not. The domain field is only used for hostname construction and cert
+// SANs, never passed to dnsmasq config or filesystem paths.
+var validDomain = regexp.MustCompile(`^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$`)
 
 // Route maps a subdomain label to a local port.
 type Route struct {
@@ -35,6 +46,9 @@ func ParseMap(s string) ([]Route, error) {
 		portStr := strings.TrimSpace(part[idx+1:])
 		if sub == "" {
 			return nil, fmt.Errorf("map entry %q: subdomain must not be empty", part)
+		}
+		if !validSubdomain.MatchString(sub) {
+			return nil, fmt.Errorf("map entry %q: subdomain %q contains invalid characters (letters, digits, hyphens only)", part, sub)
 		}
 		port, err := strconv.Atoi(portStr)
 		if err != nil || port <= 0 || port > 65535 {
@@ -98,6 +112,12 @@ func buildRoutingHandler(table map[string]*httputil.ReverseProxy) http.Handler {
 
 // routingTable constructs a hostname→ReverseProxy map from a list of routes.
 func routingTable(namespace, domain string, routes []Route) (map[string]*httputil.ReverseProxy, error) {
+	if !validSubdomain.MatchString(namespace) {
+		return nil, fmt.Errorf("invalid namespace %q: must contain only letters, digits, and hyphens", namespace)
+	}
+	if !validDomain.MatchString(domain) {
+		return nil, fmt.Errorf("invalid domain %q: must be a valid domain name (e.g. test, lvh.me)", domain)
+	}
 	table := make(map[string]*httputil.ReverseProxy, len(routes))
 	for _, r := range routes {
 		hostname := fmt.Sprintf("%s.%s.%s", r.Subdomain, namespace, domain)
@@ -105,7 +125,13 @@ func routingTable(namespace, domain string, routes []Route) (map[string]*httputi
 		if err != nil {
 			return nil, err
 		}
-		table[hostname] = httputil.NewSingleHostReverseProxy(target)
+		rp := httputil.NewSingleHostReverseProxy(target)
+		rp.ErrorHandler = func(w http.ResponseWriter, _ *http.Request, err error) {
+			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+			w.WriteHeader(http.StatusBadGateway)
+			fmt.Fprintf(w, "valla: upstream %s unavailable (%v)\n", target.Host, err)
+		}
+		table[hostname] = rp
 	}
 	return table, nil
 }
