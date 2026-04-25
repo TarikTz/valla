@@ -29,18 +29,52 @@ Certificates are generated on demand using ECDSA P-256 and signed by the local C
 
 ## Quickstart
 
-```bash
-# One-time setup
-npx valla-cli trust
+**One-time setup:**
 
-# Proxy a single service
+::: code-group
+
+```bash [npx]
+npx valla-cli trust
+```
+
+```bash [Installed]
+valla trust
+```
+
+:::
+
+**Proxy a single service:**
+
+::: code-group
+
+```bash [npx]
+npx valla-cli serve 3000
+# → https://port3000.valla.test
+```
+
+```bash [Installed]
 valla serve 3000
 # → https://port3000.valla.test
+```
 
-# Proxy multiple named services
+:::
+
+**Proxy multiple named services:**
+
+::: code-group
+
+```bash [npx]
+npx valla-cli serve --name myapp --map "ui:3000,api:8080"
+# → https://ui.myapp.test
+# → https://api.myapp.test
+```
+
+```bash [Installed]
 valla serve --name myapp --map "ui:3000,api:8080"
 # → https://ui.myapp.test
 # → https://api.myapp.test
 ```
+
+:::
 
 See [Setup](/serve/setup) to configure trust and DNS, and [Routing](/serve/routing) for all proxy options.

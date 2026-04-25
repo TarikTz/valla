@@ -2,18 +2,36 @@
 
 Valla scaffolds a complete full-stack project in one terminal flow. No boilerplate hunting, no manual wiring.
 
-## Quickstart
+## Installation
 
-```bash
+::: code-group
+
+```bash [npx (no install)]
 npx valla-cli
 ```
 
-Or install globally and run directly:
-
-```bash
+```bash [npm]
 npm install -g valla-cli
 valla
 ```
+
+```bash [Homebrew]
+# Coming soon
+brew install valla-cli
+valla
+```
+
+```bash [Binary]
+# Download a pre-built binary for your platform from:
+# https://github.com/tariktz/valla/releases
+./valla
+```
+
+:::
+
+> The npm package and pre-built binaries bundle the Go binary — **Go is not required** on your machine.
+
+## How it works
 
 The CLI walks you through nine prompts and generates a ready-to-run project:
 
