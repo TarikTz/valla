@@ -15,7 +15,7 @@ func TestGenerateWordPressEnv(t *testing.T) {
 		DatabaseIDs:  []string{"mysql"},
 		DBConfigs: map[string]registry.DBConfig{
 			"mysql": {
-				Port:     3306,
+				Port:     8051,
 				Host:     "db",
 				User:     "wordpress",
 				Password: "wordpress",
@@ -26,7 +26,7 @@ func TestGenerateWordPressEnv(t *testing.T) {
 	out := wiring.GenerateWordPressEnv(ctx)
 	for _, expected := range []string{
 		"WORDPRESS_PORT=8080",
-		"MYSQL_PORT=3306",
+		"MYSQL_PORT=8051",
 		"MYSQL_DATABASE=my_blog",
 		"WORDPRESS_DB_HOST=db:3306",
 	} {
