@@ -19,7 +19,7 @@ func GenerateWordPressEnv(ctx registry.WeldContext) string {
 	fmt.Fprintf(&builder, "MYSQL_USER=%s\n", mysql.User)
 	fmt.Fprintf(&builder, "MYSQL_PASSWORD=%s\n", mysql.Password)
 	fmt.Fprintf(&builder, "MYSQL_ROOT_PASSWORD=%s\n", mysql.Password+"_root")
-  fmt.Fprintf(&builder, "WORDPRESS_DB_HOST=%s:%d\n", mysql.Host, wordPressMySQLInternalPort)
+	fmt.Fprintf(&builder, "WORDPRESS_DB_HOST=%s:%d\n", mysql.Host, wordPressMySQLInternalPort)
 	fmt.Fprintf(&builder, "WORDPRESS_DB_NAME=%s\n", mysql.Name)
 	fmt.Fprintf(&builder, "WORDPRESS_DB_USER=%s\n", mysql.User)
 	fmt.Fprintf(&builder, "WORDPRESS_DB_PASSWORD=%s\n", mysql.Password)
