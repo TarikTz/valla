@@ -31,7 +31,7 @@ jobs:
         working-directory: documentation
 
       - name: Build documentation
-        run: npm run documentation:build
+        run: npm run docs:build
         working-directory: documentation
 
       - name: Upload artifact
