@@ -2,9 +2,28 @@
 
 `valla trust` is a one-time, per-machine command. It generates a local root CA and installs it in your OS trust store so browsers show a green padlock for every certificate valla signs.
 
-```bash
+::: code-group
+
+```bash [npx (no install)]
 npx valla-cli trust
 ```
+
+```bash [npm]
+npm install -g valla-cli
+valla trust
+```
+
+```bash [Homebrew]
+# Coming soon
+brew install valla-cli
+valla trust
+```
+
+```bash [Binary]
+./valla trust
+```
+
+:::
 
 > **No `sudo` needed upfront.** `valla trust` invokes `sudo` internally for the specific steps that require it (trust store install, `/etc/resolver/` write). Running the whole command as root is not recommended.
 

@@ -35,3 +35,32 @@ features:
     link: /scaffold/output-modes#fully-dockerized
     linkText: Learn more
 ---
+
+## Install
+
+::: code-group
+
+```bash [npx (no install)]
+npx valla-cli
+```
+
+```bash [npm]
+npm install -g valla-cli
+valla
+```
+
+```bash [Homebrew]
+# Coming soon
+brew install valla-cli
+valla
+```
+
+```bash [Binary]
+# Download a pre-built binary for your platform from GitHub Releases:
+# https://github.com/tariktz/valla/releases
+./valla
+```
+
+:::
+
+> The npm package and pre-built binaries include the Go binary — **Go is not required** on your machine.
