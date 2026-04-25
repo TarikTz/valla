@@ -60,6 +60,123 @@ Or install globally:
 npm install -g valla-cli
 ```
 
+---
+
+## Secure Serve — Zero-Config Local HTTPS
+
+`valla serve` is a local TLS reverse proxy built into the CLI. It eliminates the friction of CORS mismatches and mixed-content browser warnings during full-stack development by giving every local service a real HTTPS URL with a trusted certificate.
+
+### One-time setup (per machine)
+
+```bash
+# Generate a root CA and install it in the OS trust store
+sudo npx valla-cli trust
+```
+
+After this step the browser shows a green padlock for every `*.valla.test` URL on this machine.
+
+### Single service
+
+```bash
+# Proxy localhost:5500 → https://port5500.valla.test
+valla serve 5500
+```
+
+If port 443 is taken the CLI falls back to 8443 then 9443 — the printed URL reflects the actual port.
+
+### Multi-service routing
+
+```bash
+# Named subdomains via --map
+valla serve --name film-portal --map "ui:3000,api:8080"
+#  → https://ui.film-portal.test   (→ :3000)
+#  → https://api.film-portal.test  (→ :8080)
+
+# Port-range auto-mapping via --range
+valla serve --name dev --range 5500-5502
+#  → https://port5500.dev.test
+#  → https://port5501.dev.test
+#  → https://port5502.dev.test
+
+# Combine both flags
+valla serve --name myapp --map "web:3000" --range 8000-8001
+```
+
+Unknown subdomains receive a 502 with a plain-text list of configured routes.
+
+### Declarative config (`valla.yaml`)
+
+Running `valla serve` in a directory containing `valla.yaml` auto-loads the routing table. Explicit CLI flags override the file.
+
+```yaml
+# valla.yaml
+project: film-portal
+domain: test
+services:
+  - name: web
+    port: 5500
+    subdomain: preview   # https://preview.film-portal.test
+  - name: api
+    port: 8080
+    subdomain: api       # https://api.film-portal.test
+  - name: sso
+    port: 8443
+    subdomain: auth      # https://auth.film-portal.test
+```
+
+```bash
+# Pick up valla.yaml automatically
+cd film-portal && valla serve
+```
+
+### Interactive dashboard (`--ui`)
+
+```bash
+valla serve --name film-portal --map "ui:3000,api:8080" --ui
+```
+
+Renders a Bubbletea table view with live health checks, a rolling request log, and keyboard shortcuts:
+
+```
+  Valla Proxy Active  |  film-portal  |  .test
+  ──────────────────────────────────────────────────────────────────────
+  #    STATUS      SUBDOMAIN     TARGET              HTTPS URL
+  ──────────────────────────────────────────────────────────────────────
+  1    ● ONLINE    ui            localhost:3000       https://ui.film-portal.test:8443
+  2    ● ONLINE    api           localhost:8080       https://api.film-portal.test:8443
+  ──────────────────────────────────────────────────────────────────────
+  [Recent requests]
+  GET    ui            /css/style.css           200  12ms
+  POST   api           /v1/search               201  45ms
+  ──────────────────────────────────────────────────────────────────────
+  Press 1-9 to open in browser · q to quit
+```
+
+Press a number key to open the corresponding URL in your default browser.
+
+### Full flag reference
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `[port]` | — | Single-port mode: proxy `localhost:<port>` |
+| `--name` | `valla` | Subdomain namespace (`*.{name}.{domain}`) |
+| `--domain` | `test` | TLD — use `test` or `localhost` (`.dev` triggers a confirmation) |
+| `--map` | — | `"sub:port,sub2:port2"` named subdomain routing |
+| `--range` | — | `start-end` port-range auto-mapping |
+| `--ui` | off | Launch interactive Bubbletea dashboard |
+| `--expose` | off | Bind to `0.0.0.0` instead of `127.0.0.1` for LAN sharing |
+
+### TLD notes
+
+| TLD | Suitable | Notes |
+|-----|:--------:|-------|
+| `.test` | ✓ | Reserved for local use; no `/etc/hosts` changes needed on most OS |
+| `.localhost` | ✓ | Always resolves to 127.0.0.1 |
+| `.lvh.me` | ✓ | Public wildcard DNS that resolves to 127.0.0.1 |
+| `.dev` | ⚠ | Chrome/Edge enforce strict HSTS — the CLI prompts for confirmation |
+
+---
+
 ## Supported Stacks
 
 ### Frontend
@@ -287,6 +404,7 @@ Install only what your selected stack needs:
 - Stronger end-to-end validation across stack combinations
 - Non-interactive flags for CI and scripted usage
 - Polished release automation for npm and GitHub Releases
+- `valla serve --reload` — watch `valla.yaml` and rebuild routing table without restarting the listener
 
 ## Contributing
 
@@ -317,11 +435,17 @@ Open an [issue](https://github.com/tariktz/valla/issues) to discuss ideas before
 
 The implementation is organized around a registry of stack definitions and templates.
 
+**Scaffolding**
 - `internal/registry/` — framework metadata, embedded YAML, templates, Dockerfiles
 - `internal/tui/` — interactive prompt flow
 - `internal/wiring/` — `.env`, Docker Compose, HTTP client, and CORS wiring
 - `internal/scaffolder/` — template rendering, file writes, rollback, rename handling
 - `cmd/valla/` — CLI entrypoint and orchestration
+
+**Secure Serve**
+- `internal/proxy/` — ECDSA P-256 root CA lifecycle, SNI-based leaf cert cache, TLS reverse proxy engine, multi-service routing table, port-fallback `bindTLS`
+- `internal/proxy/config/` — `valla.yaml` parsing and validation
+- `internal/proxy/dashboard/` — Bubbletea TUI (health checks, request log, keyboard shortcuts), `WrapHandler` for request capture
 
 New stack support is additive — adding a framework does not require changes to the core flow.
 
