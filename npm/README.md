@@ -38,6 +38,7 @@ On first run, the correct pre-built binary for your platform is downloaded and c
 - Includes a dedicated WordPress mode with Docker services and a starter theme
 - Supports multiple databases simultaneously (e.g. PostgreSQL + Redis)
 - Optionally generates ORM configuration files (Prisma or Drizzle) for eligible stacks
+- **`valla serve` — zero-config local HTTPS reverse proxy** with a trusted certificate, multi-service subdomain routing, and an optional interactive dashboard
 
 ## How It Works
 
@@ -54,6 +55,33 @@ The CLI walks through a short set of prompts:
 9. Confirmation and scaffolding
 
 For WordPress, the CLI downloads the latest WordPress source, prepares Docker services, and creates a starter theme.
+
+
+## Secure Serve
+
+`valla trust` + `valla serve` give every local service a real HTTPS URL with a green padlock — no `/etc/hosts` edits, no manual `openssl`, no CORS headaches.
+
+```bash
+# One-time: install the local CA in your browser's trust store
+sudo npx valla-cli trust
+
+# Single service
+npx valla-cli serve 5500
+#  → https://port5500.valla.test
+
+# Multi-service with named subdomains
+npx valla-cli serve --name myapp --map "ui:3000,api:8080"
+#  → https://ui.myapp.test
+#  → https://api.myapp.test
+
+# Load routes from valla.yaml in the current directory
+npx valla-cli serve
+
+# Interactive dashboard (health checks, request log, keyboard shortcuts)
+npx valla-cli serve --name myapp --map "ui:3000,api:8080" --ui
+```
+
+See the [full documentation](https://github.com/tariktz/valla#secure-serve--zero-config-local-https) for `valla.yaml` config, `--range`, `--expose`, and TLD notes.
 
 ## Supported Stacks
 

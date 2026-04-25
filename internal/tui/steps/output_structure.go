@@ -3,8 +3,8 @@ package steps
 import (
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 // OutputStructure is the step for choosing a project layout.

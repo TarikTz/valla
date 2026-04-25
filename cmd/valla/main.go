@@ -3,6 +3,7 @@ package main
 import (
 	"archive/zip"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io"
 	"io/fs"
@@ -16,6 +17,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/tariktz/valla-cli/internal/detector"
+	"github.com/tariktz/valla-cli/internal/proxy"
+	"github.com/tariktz/valla-cli/internal/proxy/config"
 	"github.com/tariktz/valla-cli/internal/registry"
 	"github.com/tariktz/valla-cli/internal/scaffolder"
 	itui "github.com/tariktz/valla-cli/internal/tui"
@@ -30,9 +33,13 @@ func main() {
 		fmt.Fprintf(os.Stderr, `valla-cli — Scaffold your full stack in seconds.
 
 Usage:
-  valla-cli           Run the interactive wizard
-  valla-cli --version Print version and exit
-  valla-cli --help    Show this help
+  valla-cli                        Run the interactive wizard
+  valla-cli trust                  Install the local CA into the OS trust store
+  valla-cli serve <port>           Start a local HTTPS proxy for <port>
+    --name <namespace>             Subdomain namespace (default: valla)
+    --domain <tld>                 TLD to use (default: test)
+  valla-cli --version              Print version and exit
+  valla-cli --help                 Show this help
 
 Environment:
   VALLA_NO_UPDATE_CHECK=1  Disable the update checker
@@ -47,6 +54,15 @@ Environment:
 			return
 		case "--help", "-help", "-h":
 			usage()
+			return
+		case "trust":
+			if err := proxy.Trust(); err != nil {
+				fmt.Fprintf(os.Stderr, "trust: %v\n", err)
+				os.Exit(1)
+			}
+			return
+		case "serve":
+			runServe(os.Args[2:])
 			return
 		}
 	}
@@ -876,4 +892,98 @@ func wordpressThemeSlug(projectName string) string {
 		return "custom-theme"
 	}
 	return name
+}
+
+// runServe parses `valla serve [<port>] [flags]` and delegates to proxy.Serve.
+func runServe(args []string) {
+	fs := flag.NewFlagSet("serve", flag.ExitOnError)
+	name := fs.String("name", "", "subdomain namespace (overrides valla.yaml project)")
+	domain := fs.String("domain", "", "TLD (e.g. test, localhost; overrides valla.yaml domain)")
+	mapFlag := fs.String("map", "", `comma-separated subdomain:port pairs (e.g. "ui:3000,api:8080")`)
+	rangeFlag := fs.String("range", "", `port range to auto-map (e.g. 5500-5502)`)
+	uiFlag := fs.Bool("ui", false, "launch interactive Bubbletea dashboard instead of plain logs")
+	exposeFlag := fs.Bool("expose", false, "bind to 0.0.0.0 instead of 127.0.0.1 (LAN sharing — use with caution)")
+	fs.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage: valla serve [<port>] [--name <ns>] [--domain <tld>] [--map <pairs>] [--range <start-end>]\n")
+		fs.PrintDefaults()
+	}
+	if err := fs.Parse(args); err != nil {
+		os.Exit(1)
+	}
+
+	// Load valla.yaml from cwd; a missing file is fine — returns nil,nil.
+	cfg, err := config.Load("valla.yaml")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "serve: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Resolve namespace and domain: CLI flag > valla.yaml > built-in default.
+	namespace := "valla"
+	tld := "test"
+	if cfg != nil {
+		if cfg.Project != "" {
+			namespace = cfg.Project
+		}
+		if cfg.Domain != "" {
+			tld = cfg.Domain
+		}
+	}
+	if *name != "" {
+		namespace = *name
+	}
+	if *domain != "" {
+		tld = *domain
+	}
+
+	// Build routes: explicit CLI flags take precedence; fall back to valla.yaml services.
+	var routes []proxy.Route
+	if *mapFlag != "" {
+		r, err := proxy.ParseMap(*mapFlag)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "serve: --map: %v\n", err)
+			os.Exit(1)
+		}
+		routes = append(routes, r...)
+	}
+	if *rangeFlag != "" {
+		r, err := proxy.ParseRange(*rangeFlag)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "serve: --range: %v\n", err)
+			os.Exit(1)
+		}
+		routes = append(routes, r...)
+	}
+	// If no CLI routes were provided, use valla.yaml services.
+	if len(routes) == 0 && cfg != nil {
+		for _, svc := range cfg.Services {
+			routes = append(routes, proxy.Route{Subdomain: svc.Subdomain, Port: svc.Port})
+		}
+	}
+
+	var targetPort int
+	if fs.NArg() >= 1 {
+		if _, err := fmt.Sscan(fs.Arg(0), &targetPort); err != nil || targetPort <= 0 {
+			fmt.Fprintf(os.Stderr, "serve: invalid port %q\n", fs.Arg(0))
+			os.Exit(1)
+		}
+	}
+
+	if len(routes) == 0 && targetPort == 0 {
+		fmt.Fprintf(os.Stderr, "serve: a port argument, --map/--range, or a valla.yaml file is required\n")
+		fs.Usage()
+		os.Exit(1)
+	}
+
+	if err := proxy.Serve(proxy.ServeOptions{
+		TargetPort: targetPort,
+		Routes:     routes,
+		Namespace:  namespace,
+		Domain:     tld,
+		Dashboard:  *uiFlag,
+		Expose:     *exposeFlag,
+	}); err != nil {
+		fmt.Fprintf(os.Stderr, "serve: %v\n", err)
+		os.Exit(1)
+	}
 }
